@@ -84,6 +84,9 @@ export interface Config {
     originales: Originale;
     'oauth-clientes': OauthCliente;
     'oauth-codigos': OauthCodigo;
+    servicios: Servicio;
+    trabajos: Trabajo;
+    consultas: Consulta;
     'payload-mcp-api-keys': PayloadMcpApiKey;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
@@ -116,6 +119,9 @@ export interface Config {
     originales: OriginalesSelect<false> | OriginalesSelect<true>;
     'oauth-clientes': OauthClientesSelect<false> | OauthClientesSelect<true>;
     'oauth-codigos': OauthCodigosSelect<false> | OauthCodigosSelect<true>;
+    servicios: ServiciosSelect<false> | ServiciosSelect<true>;
+    trabajos: TrabajosSelect<false> | TrabajosSelect<true>;
+    consultas: ConsultasSelect<false> | ConsultasSelect<true>;
     'payload-mcp-api-keys': PayloadMcpApiKeysSelect<false> | PayloadMcpApiKeysSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
@@ -129,10 +135,12 @@ export interface Config {
   fallbackLocale: null;
   globals: {
     configuracion: Configuracion;
+    web: Web;
     'payload-jobs-stats': PayloadJobsStat;
   };
   globalsSelect: {
     configuracion: ConfiguracionSelect<false> | ConfiguracionSelect<true>;
+    web: WebSelect<false> | WebSelect<true>;
     'payload-jobs-stats': PayloadJobsStatsSelect<false> | PayloadJobsStatsSelect<true>;
   };
   locale: null;
@@ -593,7 +601,8 @@ export interface Actividad {
     | 'correo_error'
     | 'permisos'
     | 'seguridad'
-    | 'exportacion';
+    | 'exportacion'
+    | 'consulta';
   descripcion: string;
   usuario?: (number | null) | User;
   /**
@@ -676,6 +685,81 @@ export interface OauthCodigo {
   codeChallenge: string;
   caduca: string;
   usado?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "servicios".
+ */
+export interface Servicio {
+  id: number;
+  titulo: string;
+  /**
+   * Ancla en la página de servicios. Se genera desde el título.
+   */
+  slug?: string | null;
+  area: 'calidad' | 'medio-ambiente' | 'gestion';
+  resumen: string;
+  puntos?:
+    | {
+        texto: string;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Ruta de la web (/portal) o dirección completa.
+   */
+  enlace?: string | null;
+  textoEnlace?: string | null;
+  /**
+   * Se muestra en la página de inicio.
+   */
+  destacado?: boolean | null;
+  /**
+   * Menor primero.
+   */
+  orden?: number | null;
+  publicado?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "trabajos".
+ */
+export interface Trabajo {
+  id: number;
+  titulo: string;
+  descripcion?: string | null;
+  cliente?: string | null;
+  lugar?: string | null;
+  anio?: number | null;
+  area: 'calidad' | 'medio-ambiente' | 'gestion';
+  /**
+   * Menor primero.
+   */
+  orden?: number | null;
+  publicado?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "consultas".
+ */
+export interface Consulta {
+  id: number;
+  nombre: string;
+  empresa?: string | null;
+  email: string;
+  telefono?: string | null;
+  servicio?: string | null;
+  mensaje: string;
+  estado?: ('nueva' | 'atendida' | 'descartada') | null;
+  notas?: string | null;
+  aceptaPrivacidad?: boolean | null;
+  ip?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -1031,6 +1115,18 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'oauth-codigos';
         value: number | OauthCodigo;
+      } | null)
+    | ({
+        relationTo: 'servicios';
+        value: number | Servicio;
+      } | null)
+    | ({
+        relationTo: 'trabajos';
+        value: number | Trabajo;
+      } | null)
+    | ({
+        relationTo: 'consultas';
+        value: number | Consulta;
       } | null)
     | ({
         relationTo: 'payload-mcp-api-keys';
@@ -1435,6 +1531,63 @@ export interface OauthCodigosSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "servicios_select".
+ */
+export interface ServiciosSelect<T extends boolean = true> {
+  titulo?: T;
+  slug?: T;
+  area?: T;
+  resumen?: T;
+  puntos?:
+    | T
+    | {
+        texto?: T;
+        id?: T;
+      };
+  enlace?: T;
+  textoEnlace?: T;
+  destacado?: T;
+  orden?: T;
+  publicado?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "trabajos_select".
+ */
+export interface TrabajosSelect<T extends boolean = true> {
+  titulo?: T;
+  descripcion?: T;
+  cliente?: T;
+  lugar?: T;
+  anio?: T;
+  area?: T;
+  orden?: T;
+  publicado?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "consultas_select".
+ */
+export interface ConsultasSelect<T extends boolean = true> {
+  nombre?: T;
+  empresa?: T;
+  email?: T;
+  telefono?: T;
+  servicio?: T;
+  mensaje?: T;
+  estado?: T;
+  notas?: T;
+  aceptaPrivacidad?: T;
+  ip?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-mcp-api-keys_select".
  */
 export interface PayloadMcpApiKeysSelect<T extends boolean = true> {
@@ -1683,6 +1836,11 @@ export interface Configuracion {
       cuerpo?: string | null;
       boton?: string | null;
     };
+    consulta_web?: {
+      asunto?: string | null;
+      cuerpo?: string | null;
+      boton?: string | null;
+    };
     almacenamiento?: {
       asunto?: string | null;
       cuerpo?: string | null;
@@ -1703,6 +1861,79 @@ export interface Configuracion {
         id?: string | null;
       }[]
     | null;
+  updatedAt?: string | null;
+  createdAt?: string | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "web".
+ */
+export interface Web {
+  id: number;
+  portada?: {
+    antetitulo?: string | null;
+    titulo?: string | null;
+    subtitulo?: string | null;
+    /**
+     * Opcional. Fotografía de cabecera (horizontal).
+     */
+    imagen?: (number | null) | Media;
+  };
+  descripcion?: string | null;
+  presentacion?: string | null;
+  /**
+   * Vacío: se muestra el equipo por defecto.
+   */
+  profesionales?:
+    | {
+        titulo: string;
+        texto: string;
+        id?: string | null;
+      }[]
+    | null;
+  email?: string | null;
+  /**
+   * Vacío: Logroño y Burgos.
+   */
+  sedes?:
+    | {
+        ciudad: string;
+        telefono: string;
+        direccion: string;
+        codigoPostal: string;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Vacío: los super administradores que reciben avisos.
+   */
+  emailsConsultas?:
+    | {
+        email: string;
+        id?: string | null;
+      }[]
+    | null;
+  legal?: {
+    titular?: string | null;
+    cif?: string | null;
+    domicilio?: string | null;
+    /**
+     * Si es una sociedad: Registro Mercantil, tomo, folio y hoja.
+     */
+    registro?: string | null;
+  };
+  /**
+   * Déjelo vacío para usar el texto por defecto, que se rellena con los datos del titular. Separe los párrafos con una línea en blanco; una línea que empiece por «## » es un apartado.
+   */
+  avisoLegal?: string | null;
+  /**
+   * Déjelo vacío para usar el texto por defecto, que se rellena con los datos del titular. Separe los párrafos con una línea en blanco; una línea que empiece por «## » es un apartado.
+   */
+  privacidad?: string | null;
+  /**
+   * Déjelo vacío para usar el texto por defecto, que se rellena con los datos del titular. Separe los párrafos con una línea en blanco; una línea que empiece por «## » es un apartado.
+   */
+  cookies?: string | null;
   updatedAt?: string | null;
   createdAt?: string | null;
 }
@@ -1875,6 +2106,13 @@ export interface ConfiguracionSelect<T extends boolean = true> {
               cuerpo?: T;
               boton?: T;
             };
+        consulta_web?:
+          | T
+          | {
+              asunto?: T;
+              cuerpo?: T;
+              boton?: T;
+            };
         almacenamiento?:
           | T
           | {
@@ -1897,6 +2135,59 @@ export interface ConfiguracionSelect<T extends boolean = true> {
         descripcion?: T;
         id?: T;
       };
+  updatedAt?: T;
+  createdAt?: T;
+  globalType?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "web_select".
+ */
+export interface WebSelect<T extends boolean = true> {
+  portada?:
+    | T
+    | {
+        antetitulo?: T;
+        titulo?: T;
+        subtitulo?: T;
+        imagen?: T;
+      };
+  descripcion?: T;
+  presentacion?: T;
+  profesionales?:
+    | T
+    | {
+        titulo?: T;
+        texto?: T;
+        id?: T;
+      };
+  email?: T;
+  sedes?:
+    | T
+    | {
+        ciudad?: T;
+        telefono?: T;
+        direccion?: T;
+        codigoPostal?: T;
+        id?: T;
+      };
+  emailsConsultas?:
+    | T
+    | {
+        email?: T;
+        id?: T;
+      };
+  legal?:
+    | T
+    | {
+        titular?: T;
+        cif?: T;
+        domicilio?: T;
+        registro?: T;
+      };
+  avisoLegal?: T;
+  privacidad?: T;
+  cookies?: T;
   updatedAt?: T;
   createdAt?: T;
   globalType?: T;

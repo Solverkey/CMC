@@ -19,6 +19,7 @@ export type Programar = {
   idempotencia?: string
   /** Para correos con un enlace de un solo uso (contraseñas): no se guarda el HTML en el registro. */
   sensible?: boolean
+  responderA?: string
 }
 
 const parrafos = (texto: string) =>
@@ -94,7 +95,7 @@ export async function programarCorreo(req: PayloadRequest, p: Programar) {
     await req.payload.jobs.queue({
       task: 'enviarCorreo',
       queue: 'correo',
-      input: { correo: String(correo.id), html, desde: `"${cfg.remitenteNombre.replace(/"/g, '')}" <${cfg.remitenteEmail}>`, responderA: cfg.responderA ?? '' },
+      input: { correo: String(correo.id), html, desde: `"${cfg.remitenteNombre.replace(/"/g, '')}" <${cfg.remitenteEmail}>`, responderA: p.responderA ?? cfg.responderA ?? '' },
       req,
     })
     await registrar(req, { accion: 'correo', descripcion: `Correo «${asunto}» programado para ${d.email}`, empresa: p.empresa, coleccion: 'correos', registroId: correo.id })

@@ -23,6 +23,7 @@ export const ACCIONES = [
   { label: 'Accesos y permisos', value: 'permisos' },
   { label: 'Seguridad', value: 'seguridad' },
   { label: 'Exportación', value: 'exportacion' },
+  { label: 'Consulta desde la web', value: 'consulta' },
 ] as const
 
 export type Accion = (typeof ACCIONES)[number]['value']

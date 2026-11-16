@@ -1,11 +1,13 @@
 /**
  * Datos iniciales: npm run seed
- * Crea el catálogo de tipos de relación, el super administrador de CMC y, salvo SEED_SIN_DEMO=1,
+ * Crea el contenido inicial de la web (servicios y trabajos), el catálogo de tipos de relación,
+ * el super administrador de CMC y, salvo SEED_SIN_DEMO=1,
  * una empresa de ejemplo con su administradora, categorías y documentos en cada estado del semáforo.
  */
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import { RELACIONES_INICIALES } from './lib/catalogo'
+import { SERVICIOS_INICIALES, TRABAJOS_INICIALES } from './lib/contenidoWeb'
 
 const enDias = (n: number) => {
   const d = new Date()
@@ -15,6 +17,18 @@ const enDias = (n: number) => {
 
 const payload = await getPayload({ config })
 const context = { sinInvitacion: true, sinAdminInicial: true, sinAvisos: true }
+
+// Contenido inicial de la web (independiente de los usuarios): solo si aún no hay ninguno.
+if (!(await payload.count({ collection: 'servicios' })).totalDocs) {
+  for (const [i, s] of SERVICIOS_INICIALES.entries()) {
+    await payload.create({ collection: 'servicios', data: { ...s, puntos: s.puntos.map((texto) => ({ texto })), orden: (i + 1) * 10 }, context })
+  }
+  payload.logger.info(`Web: ${SERVICIOS_INICIALES.length} servicios.`)
+}
+if (!(await payload.count({ collection: 'trabajos' })).totalDocs) {
+  for (const [i, t] of TRABAJOS_INICIALES.entries()) await payload.create({ collection: 'trabajos', data: { ...t, orden: (i + 1) * 10 }, context })
+  payload.logger.info(`Web: ${TRABAJOS_INICIALES.length} trabajos realizados.`)
+}
 
 const yaHay = await payload.count({ collection: 'users' })
 if (yaHay.totalDocs > 0) {

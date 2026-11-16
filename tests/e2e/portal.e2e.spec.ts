@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test'
 
-test('la raíz lleva al acceso del portal', async ({ page }) => {
+test('desde la web pública se llega al acceso de clientes', async ({ page }) => {
   await page.goto('/')
+  await page.getByRole('navigation', { name: 'Principal' }).first().getByRole('link', { name: 'Acceso clientes' }).click()
   await expect(page).toHaveURL(/\/portal\/login/)
   await expect(page.getByRole('heading', { name: 'Acceso al portal' })).toBeVisible()
 })
@@ -16,7 +17,7 @@ test('credenciales incorrectas muestran un aviso', async ({ page }) => {
   await page.getByLabel('Correo electrónico').fill('nadie@ejemplo.test')
   await page.getByLabel('Contraseña').fill('NoEsLaClave2026')
   await page.getByRole('button', { name: 'Entrar' }).click()
-  await expect(page.getByRole('alert')).toContainText('incorrectos')
+  await expect(page.locator('main [role=alert], form [role=alert]').first()).toContainText('incorrectos')
 })
 
 test('un usuario de empresa entra y ve su panel', async ({ page }) => {

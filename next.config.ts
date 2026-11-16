@@ -37,9 +37,13 @@ const nextConfig: NextConfig = {
           { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
-          { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
         ],
       },
+      // Solo la web pública se indexa; el portal, la administración y la API nunca.
+      ...['/portal/:path*', '/portal', '/admin/:path*', '/admin', '/api/:path*'].map((source) => ({
+        source,
+        headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }],
+      })),
     ]
   },
 }

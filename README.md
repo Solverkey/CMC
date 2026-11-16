@@ -1,13 +1,33 @@
-# CMC · Portal documental
+# CMC · Web y portal documental
 
-Portal documental de CMC en **Next.js 16 + Payload CMS 3**, según el *Informe funcional — Portal documental CMC v1.0* (Solverkey). No hay web pública: `/` lleva directamente al portal.
+Web pública de CMC y portal documental en **Next.js 16 + Payload CMS 3**. El portal sigue el *Informe funcional — Portal documental CMC v1.0* (Solverkey).
+
+## Web pública
+
+| URL | Contenido | Se edita en |
+|---|---|---|
+| `/` | Portada, áreas, servicios destacados, portal documental, trabajos y clientes | Web → Web (portada), Servicios (destacado), Trabajos realizados |
+| `/servicios` | Servicios agrupados por área: calidad, medio ambiente y gestión | Web → Servicios |
+| `/trabajos` | Trabajos realizados, con filtro por área | Web → Trabajos realizados |
+| `/quienes-somos` | Presentación y equipo | Web → Web (Quiénes somos) |
+| `/contacto` | Sedes y formulario de consulta | Web → Web (Contacto) |
+| `/aviso-legal`, `/privacidad`, `/cookies` | Textos legales | Web → Web (Textos legales) |
+
+- El contenido de partida (servicios, trabajos, sedes y presentación) es el de la web actual de CMC. Lo que se deja vacío en el panel usa esos textos.
+- **Formulario de contacto:**
+  - Guarda la consulta en Web → Consultas de la web.
+  - Avisa por correo a los destinatarios configurados (o a los super administradores), con respuesta directa al remitente.
+  - Queda en el registro de actividad.
+  - Contra el spam: campo trampa, envío mínimo a los 3 segundos de cargar la página y un máximo de 5 consultas por hora e IP.
+- **Antes de publicar:** rellene en Web → Textos legales el CIF y los datos registrales del titular. Los textos por defecto no los inventan.
+- **Buscadores:** la web se indexa, con `sitemap.xml`, `robots.txt` y datos estructurados. El portal, el panel y la API llevan `noindex`.
 
 ## Arrancar en local
 
 ```bash
 cp .env.example .env        # cambie PAYLOAD_SECRET; en local añada CMC_2FA_SUPERADMIN=opcional
 npm install
-npm run seed                # catálogo inicial, super administrador y empresa de demo
+npm run seed                # contenido de la web, catálogo, super administrador y empresa de demo
 npm run dev                 # http://localhost:3000
 ```
 
@@ -26,7 +46,7 @@ Todo se activa por variables de entorno (ver `.env.example`):
 | Seguimiento de correo | `EMAIL_WEBHOOK_SECRET` | Webhook `/api/correos/eventos` para entregado, abierto y rebotado. |
 | Dirección pública | `NEXT_PUBLIC_SERVER_URL` | Enlaces de los correos y OAuth del servidor MCP. |
 
-En producción el doble factor es siempre obligatorio para los super administradores. Al cambiar el modelo de datos hay que crear una migración: `DATABASE_URL=postgres://… npm run migrate:create nombre`.
+En producción el doble factor es siempre obligatorio para los super administradores. Ejecute `npm run seed` una vez contra la base de producción para cargar el contenido inicial de la web (con `SEED_SIN_DEMO=1` para no crear la empresa de demo). Al cambiar el modelo de datos hay que crear una migración: `DATABASE_URL=postgres://… npm run migrate:create nombre`.
 
 ## Qué hay en el portal
 
@@ -63,6 +83,6 @@ Las herramientas están en `src/mcp/herramientas.ts` y usan los mismos servicios
 
 ```bash
 npm run test:int     # lógica, aislamiento entre empresas, permisos y doble factor (base de datos aparte)
-npm run test:e2e     # navegador (E2E_EMAIL y E2E_PASSWORD para la prueba con sesión)
+npm run test:e2e     # navegador: web pública, contacto, menú móvil y acceso (E2E_EMAIL y E2E_PASSWORD para la prueba con sesión)
 npm run typecheck
 ```

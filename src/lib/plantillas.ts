@@ -122,6 +122,12 @@ export const PLANTILLAS = {
     cuerpo: '{{nombre}} ha escrito en la conversación «{{asunto}}» de {{empresa}}:\n\n{{mensaje}}\n\nResponda desde el portal para que quede registrado.',
     boton: 'Responder en el portal',
   },
+  consulta_web: {
+    etiqueta: 'Nueva consulta desde la web (CMC)',
+    asunto: 'Consulta de {{nombre}} desde la web',
+    cuerpo: '{{nombre}} ({{empresa}}) ha escrito desde el formulario de contacto.\n\nCorreo: {{email}}\nTeléfono: {{telefono}}\nServicio: {{servicio}}\n\n{{mensaje}}',
+    boton: 'Ver la consulta',
+  },
   almacenamiento: {
     etiqueta: 'Aviso de almacenamiento',
     asunto: 'El portal ha consumido el {{uso}} % del almacenamiento incluido',

@@ -22,8 +22,10 @@ import { Envios } from './collections/Envios'
 import { Media } from './collections/Media'
 import { OAuthClientes, OAuthCodigos } from './collections/OAuth'
 import { Users } from './collections/Users'
+import { Consultas, Servicios, Trabajos } from './collections/Web'
 import { endpoints } from './endpoints'
 import { Configuracion } from './globals/Configuracion'
+import { Web } from './globals/Web'
 import { enviarCorreo } from './jobs/enviarCorreo'
 import { recalcularEstados, resumenSemanal } from './jobs/recalcularEstados'
 import { MAX_BYTES, configS3 } from './lib/ficheros'
@@ -72,8 +74,8 @@ export default buildConfig({
     dateFormat: 'dd/MM/yyyy',
   },
   i18n: { supportedLanguages: { es }, fallbackLanguage: 'es' },
-  collections: [Empresas, Categorias, Documentos, Archivos, Envios, Hilos, Mensajes, Adjuntos, Users, Catalogo, Correos, Actividad, Media, Originales, OAuthClientes, OAuthCodigos],
-  globals: [Configuracion],
+  collections: [Empresas, Categorias, Documentos, Archivos, Envios, Hilos, Mensajes, Adjuntos, Users, Catalogo, Correos, Actividad, Media, Originales, OAuthClientes, OAuthCodigos, Servicios, Trabajos, Consultas],
+  globals: [Configuracion, Web],
   endpoints,
   editor: lexicalEditor(),
   secret: process.env.PAYLOAD_SECRET || '',
