@@ -1,5 +1,6 @@
 'use client'
 import { useRef, useState } from 'react'
+import { Combobox } from './Combobox'
 import { Icon } from './Icon'
 
 type Props = { empresaId: string; documentoId?: string; tituloPorDefecto?: string }
@@ -45,7 +46,10 @@ export function EnviarForm({ empresaId, documentoId, tituloPorDefecto }: Props) 
       )
       const res = await fetch('/api/envios', { method: 'POST', body, credentials: 'include' })
       const ok = res.ok
-      const msg = ok ? 'Enviado a CMC para revisión' : ((await res.json().catch(() => null))?.errors?.[0]?.message ?? 'Error al enviar')
+      const json = await res.json().catch(() => null)
+      const doc = json?.doc as { filesize?: number; tamanoOriginal?: number } | undefined
+      const comprimido = ok && doc?.filesize && doc.tamanoOriginal && doc.filesize < doc.tamanoOriginal ? ` · optimizada de ${kb(doc.tamanoOriginal)} a ${kb(doc.filesize)}` : ''
+      const msg = ok ? `Enviado a CMC para revisión${comprimido}` : (json?.errors?.[0]?.message ?? 'Error al enviar')
       setItems((p) => p.map((it, j) => (j === i ? { ...it, estado: ok ? 'ok' : 'error', msg } : it)))
     }
     setEnviando(false)
@@ -56,12 +60,11 @@ export function EnviarForm({ empresaId, documentoId, tituloPorDefecto }: Props) 
       <div className="row" style={{ gap: 16, alignItems: 'stretch' }}>
         <div className="field" style={{ flex: '1 1 220px' }}>
           <label htmlFor="titulo">Nombre del documento</label>
-          <input id="titulo" name="titulo" defaultValue={tituloPorDefecto} placeholder="Ej.: Inspección OCA baja tensión" />
+          <Combobox tipo="documento" id="titulo" name="titulo" defaultValue={tituloPorDefecto} placeholder="Ej.: Inspección OCA baja tensión" />
         </div>
         <div className="field" style={{ flex: '1 1 180px' }}>
           <label htmlFor="relacion">Tipo de relación</label>
-          <input id="relacion" name="relacion" list="relaciones" defaultValue={documentoId ? 'Renovación' : 'Original'} />
-          <datalist id="relaciones"><option value="Original" /><option value="Renovación" /><option value="Subsanación" /><option value="Anexo" /><option value="Actualización" /></datalist>
+          <Combobox tipo="relacion" id="relacion" name="relacion" defaultValue={documentoId ? 'Renovación' : 'Original'} />
         </div>
         <div className="field" style={{ flex: '1 1 180px' }}>
           <label htmlFor="caducidad">Nueva caducidad</label>
@@ -83,8 +86,8 @@ export function EnviarForm({ empresaId, documentoId, tituloPorDefecto }: Props) 
       >
         <span style={{ color: 'var(--slate)' }}><Icon name="upload" size={32} /></span>
         <strong>Arrastre aquí sus documentos</strong>
-        <span>o <u>selecciónelos en su equipo</u> · PDF, imágenes u Office, hasta 50 MB</span>
-        <input ref={input} type="file" multiple hidden accept=".pdf,image/*,.doc,.docx,.xls,.xlsx" onChange={(e) => añadir(e.target.files)} />
+        <span>o <u>selecciónelos en su equipo</u> · PDF, fotos (también del móvil) u Office, hasta 50 MB. Las fotos se optimizan automáticamente.</span>
+        <input ref={input} type="file" multiple hidden accept=".pdf,image/*,.heic,.heif,.doc,.docx,.xls,.xlsx" onChange={(e) => añadir(e.target.files)} />
       </div>
 
       {items.map((it, i) => (

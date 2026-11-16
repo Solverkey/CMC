@@ -1,8 +1,8 @@
 {
   "name": "cmc-web",
   "version": "1.0.0",
-  "description": "A blank template to get started with Payload 3.0",
-  "license": "MIT",
+  "description": "Portal documental de CMC (Next.js + Payload CMS)",
+  "license": "UNLICENSED",
   "type": "module",
   "scripts": {
     "build": "cross-env NODE_OPTIONS=\"--no-deprecation --max-old-space-size=8000\" next build",
@@ -13,29 +13,44 @@
     "lint": "cross-env NODE_OPTIONS=--no-deprecation eslint .",
     "payload": "cross-env NODE_OPTIONS=--no-deprecation payload",
     "start": "cross-env NODE_OPTIONS=--no-deprecation next start",
-    "test": "pnpm run test:int && pnpm run test:e2e",
+    "test": "npm run test:int && npm run test:e2e",
     "test:e2e": "cross-env NODE_OPTIONS=\"--no-deprecation --import=tsx/esm\" playwright test --config=playwright.config.ts",
     "test:int": "cross-env NODE_OPTIONS=--no-deprecation vitest run --config ./vitest.config.mts",
-    "seed": "cross-env NODE_OPTIONS=--no-deprecation payload run src/seed.ts"
+    "seed": "cross-env NODE_OPTIONS=--no-deprecation payload run src/seed.ts",
+    "migrate:create": "cross-env NODE_OPTIONS=--no-deprecation payload migrate:create",
+    "migrate": "cross-env NODE_OPTIONS=--no-deprecation payload migrate",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@payloadcms/db-postgres": "3.93.0",
+    "@payloadcms/db-sqlite": "3.93.0",
+    "@payloadcms/email-nodemailer": "3.93.0",
     "@payloadcms/next": "3.93.0",
+    "@payloadcms/plugin-mcp": "3.93.0",
     "@payloadcms/richtext-lexical": "3.93.0",
+    "@payloadcms/storage-s3": "3.93.0",
     "@payloadcms/ui": "3.93.0",
     "cross-env": "^7.0.3",
     "dotenv": "16.4.7",
+    "exceljs": "^4.4.0",
     "graphql": "^16.8.1",
+    "heic-convert": "^2.1.0",
+    "jszip": "^3.10.2",
     "next": "16.4.1",
     "payload": "3.93.0",
+    "pdf-lib": "^1.17.1",
+    "qrcode": "^1.5.4",
     "react": "19.2.9",
     "react-dom": "19.2.9",
     "sharp": "0.35.4",
-    "@payloadcms/db-sqlite": "3.93.0"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
     "@testing-library/react": "16.3.0",
+    "@types/heic-convert": "^2.1.1",
     "@types/node": "22.19.9",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "4.5.2",
@@ -49,14 +64,7 @@
     "vitest": "4.0.18"
   },
   "engines": {
-    "node": "^22.23.5 || ^24.22.3 || >=26.13.1",
-    "pnpm": "^9 || ^10 || ^11"
+    "node": "^22.23.5 || ^24.22.3 || >=26.13.1"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "sharp",
-      "esbuild",
-      "unrs-resolver"
-    ]
-  }
+  "private": true
 }

@@ -1,39 +1,119 @@
+import { postgresAdapter } from '@payloadcms/db-postgres'
 import { sqliteAdapter } from '@payloadcms/db-sqlite'
+import { nodemailerAdapter } from '@payloadcms/email-nodemailer'
+import { mcpPlugin } from '@payloadcms/plugin-mcp'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
+import { es } from '@payloadcms/translations/languages/es'
+import { s3Storage } from '@payloadcms/storage-s3'
 import path from 'path'
 import { buildConfig } from 'payload'
-import { fileURLToPath } from 'url'
 import sharp from 'sharp'
+import { fileURLToPath } from 'url'
 
-import { Users } from './collections/Users'
-import { Media } from './collections/Media'
-import { Empresas } from './collections/Empresas'
-import { Categorias } from './collections/Categorias'
-import { Documentos } from './collections/Documentos'
+import { Actividad } from './collections/Actividad'
 import { Archivos } from './collections/Archivos'
+import { Catalogo } from './collections/Catalogo'
+import { Categorias } from './collections/Categorias'
+import { Adjuntos, Hilos, Mensajes, Originales } from './collections/Comunicacion'
+import { Correos } from './collections/Correos'
+import { Documentos } from './collections/Documentos'
+import { Empresas } from './collections/Empresas'
 import { Envios } from './collections/Envios'
-import { recalcularEstados } from './jobs/recalcularEstados'
+import { Media } from './collections/Media'
+import { OAuthClientes, OAuthCodigos } from './collections/OAuth'
+import { Users } from './collections/Users'
+import { endpoints } from './endpoints'
+import { Configuracion } from './globals/Configuracion'
+import { enviarCorreo } from './jobs/enviarCorreo'
+import { recalcularEstados, resumenSemanal } from './jobs/recalcularEstados'
+import { MAX_BYTES, configS3 } from './lib/ficheros'
+import { ajustarColeccionClaves, comprobarAcceso } from './mcp/claves'
+import { herramientas } from './mcp/herramientas'
+import { migrations } from './migrations'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
 
+const serverURL = (process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000').replace(/\/$/, '')
+const databaseURL = process.env.DATABASE_URL || 'file:./cmc.db'
+
+// Producción: Postgres en un servidor de la UE (DATABASE_URL=postgres://…). Local: SQLite en un fichero.
+const db = /^postgres(ql)?:\/\//.test(databaseURL)
+  ? postgresAdapter({
+      pool: { connectionString: databaseURL, ssl: process.env.DATABASE_SSL === 'false' ? false : process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined },
+      migrationDir: path.resolve(dirname, 'migrations'),
+      // En producción el esquema se crea y actualiza con las migraciones al arrancar.
+      prodMigrations: migrations,
+    })
+  : sqliteAdapter({ client: { url: databaseURL } })
+
+// Correo transaccional con remitente del dominio de CMC. Sin SMTP_HOST, los correos se muestran en consola.
+const email = process.env.SMTP_HOST
+  ? nodemailerAdapter({
+      defaultFromAddress: process.env.EMAIL_FROM || 'avisos@localhost',
+      defaultFromName: process.env.EMAIL_FROM_NAME || 'CMC · Portal documental',
+      transportOptions: {
+        host: process.env.SMTP_HOST,
+        port: Number(process.env.SMTP_PORT || 587),
+        secure: Number(process.env.SMTP_PORT) === 465,
+        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+      },
+    })
+  : undefined
+
+const PROTEGIDAS = ['archivos', 'envios', 'adjuntos', 'originales'] as const
+
 export default buildConfig({
+  serverURL,
   admin: {
     user: Users.slug,
     meta: { titleSuffix: ' · CMC' },
     importMap: { baseDir: path.resolve(dirname) },
     dateFormat: 'dd/MM/yyyy',
   },
-  collections: [Empresas, Categorias, Documentos, Archivos, Envios, Users, Media],
+  i18n: { supportedLanguages: { es }, fallbackLanguage: 'es' },
+  collections: [Empresas, Categorias, Documentos, Archivos, Envios, Hilos, Mensajes, Adjuntos, Users, Catalogo, Correos, Actividad, Media, Originales, OAuthClientes, OAuthCodigos],
+  globals: [Configuracion],
+  endpoints,
   editor: lexicalEditor(),
   secret: process.env.PAYLOAD_SECRET || '',
   typescript: { outputFile: path.resolve(dirname, 'payload-types.ts') },
-  // Desarrollo: SQLite. Producción: cambiar a @payloadcms/db-postgres (servidor en la UE).
-  db: sqliteAdapter({ client: { url: process.env.DATABASE_URL || '' } }),
+  graphQL: { disable: true },
+  cors: [serverURL],
+  csrf: [serverURL],
+  upload: { limits: { fileSize: MAX_BYTES } },
+  db,
+  email,
   sharp,
   jobs: {
-    tasks: [recalcularEstados],
-    autoRun: [{ cron: '*/5 * * * *', queue: 'nocturna' }],
+    tasks: [recalcularEstados, resumenSemanal, enviarCorreo],
+    autoRun: [
+      { cron: '* * * * *', queue: 'correo' },
+      { cron: '*/5 * * * *', queue: 'nocturna' },
+    ],
+    deleteJobOnComplete: false,
   },
-  plugins: [],
+  plugins: [
+    // Archivos cifrados en reposo en un almacenamiento S3 de la UE, con enlaces de descarga temporales.
+    s3Storage({
+      enabled: Boolean(process.env.S3_BUCKET),
+      bucket: process.env.S3_BUCKET || '',
+      config: configS3(),
+      acl: 'private',
+      collections: {
+        ...Object.fromEntries(PROTEGIDAS.map((slug) => [slug, { prefix: slug, signedDownloads: { shouldUseSignedURL: () => true, expiresIn: 300 } }])),
+        media: { prefix: 'media' },
+      },
+    }),
+    mcpPlugin({
+      userCollection: 'users',
+      overrideApiKeyCollection: ajustarColeccionClaves,
+      overrideAuth: async (req, porDefecto) => comprobarAcceso(req, (await porDefecto()) as Record<string, any>, herramientas.map((t) => t.name)) as never,
+      mcp: {
+        // El SDK de MCP admite esquemas de zod 4; los tipos del plugin aún declaran zod 3.
+        tools: herramientas as never,
+        serverOptions: { serverInfo: { name: 'Portal documental CMC', version: '1.0.0' } },
+      },
+    }),
+  ],
 })

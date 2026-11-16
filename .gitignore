@@ -41,6 +41,15 @@ next-env.d.ts
 .env
 
 /media
+/uploads
+
+# Base de datos local (SQLite) y de pruebas
+*.db
+*.db-journal
+/tests/.uploads
+
+# Generado por Next en desarrollo
+/AGENTS.md
 
 # Playwright
 node_modules/

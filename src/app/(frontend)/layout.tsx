@@ -6,8 +6,9 @@ const jost = Jost({ subsets: ['latin'], weight: ['400', '500', '600'], variable:
 const publicSans = Public_Sans({ subsets: ['latin'], weight: ['400', '600'], variable: '--font-sans' })
 
 export const metadata = {
-  title: { default: 'CMC · Consultoría de calidad y medio ambiente', template: '%s · CMC' },
-  description: 'Implantación ISO 9001 e ISO 14001, estudios de impacto ambiental y gestión documental en Logroño y Burgos.',
+  title: { default: 'Portal documental · CMC', template: '%s · Portal documental CMC' },
+  description: 'Portal documental de CMC: documentación ISO, OCA, licencias y proyectos con control de caducidades.',
+  robots: { index: false, follow: false },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -64,6 +64,7 @@ export type SupportedTimezones =
 export interface Config {
   auth: {
     users: UserAuthOperations;
+    'payload-mcp-api-keys': PayloadMcpApiKeyAuthOperations;
   };
   blocks: {};
   collections: {
@@ -72,8 +73,18 @@ export interface Config {
     documentos: Documento;
     archivos: Archivo;
     envios: Envio;
+    hilos: Hilo;
+    mensajes: Mensaje;
+    adjuntos: Adjunto;
     users: User;
+    catalogo: Catalogo;
+    correos: Correo;
+    actividad: Actividad;
     media: Media;
+    originales: Originale;
+    'oauth-clientes': OauthCliente;
+    'oauth-codigos': OauthCodigo;
+    'payload-mcp-api-keys': PayloadMcpApiKey;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-locked-documents': PayloadLockedDocument;
@@ -84,6 +95,9 @@ export interface Config {
     documentos: {
       historico: 'archivos';
     };
+    hilos: {
+      mensajes: 'mensajes';
+    };
   };
   collectionsSelect: {
     empresas: EmpresasSelect<false> | EmpresasSelect<true>;
@@ -91,8 +105,18 @@ export interface Config {
     documentos: DocumentosSelect<false> | DocumentosSelect<true>;
     archivos: ArchivosSelect<false> | ArchivosSelect<true>;
     envios: EnviosSelect<false> | EnviosSelect<true>;
+    hilos: HilosSelect<false> | HilosSelect<true>;
+    mensajes: MensajesSelect<false> | MensajesSelect<true>;
+    adjuntos: AdjuntosSelect<false> | AdjuntosSelect<true>;
     users: UsersSelect<false> | UsersSelect<true>;
+    catalogo: CatalogoSelect<false> | CatalogoSelect<true>;
+    correos: CorreosSelect<false> | CorreosSelect<true>;
+    actividad: ActividadSelect<false> | ActividadSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
+    originales: OriginalesSelect<false> | OriginalesSelect<true>;
+    'oauth-clientes': OauthClientesSelect<false> | OauthClientesSelect<true>;
+    'oauth-codigos': OauthCodigosSelect<false> | OauthCodigosSelect<true>;
+    'payload-mcp-api-keys': PayloadMcpApiKeysSelect<false> | PayloadMcpApiKeysSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
@@ -104,19 +128,23 @@ export interface Config {
   };
   fallbackLocale: null;
   globals: {
+    configuracion: Configuracion;
     'payload-jobs-stats': PayloadJobsStat;
   };
   globalsSelect: {
+    configuracion: ConfiguracionSelect<false> | ConfiguracionSelect<true>;
     'payload-jobs-stats': PayloadJobsStatsSelect<false> | PayloadJobsStatsSelect<true>;
   };
   locale: null;
   widgets: {
     collections: CollectionsWidget;
   };
-  user: User;
+  user: User | PayloadMcpApiKey;
   jobs: {
     tasks: {
       recalcularEstados: TaskRecalcularEstados;
+      resumenSemanal: TaskResumenSemanal;
+      enviarCorreo: TaskEnviarCorreo;
       inline: {
         input: unknown;
         output: unknown;
@@ -126,6 +154,24 @@ export interface Config {
   };
 }
 export interface UserAuthOperations {
+  forgotPassword: {
+    email: string;
+    password: string;
+  };
+  login: {
+    email: string;
+    password: string;
+  };
+  registerFirstUser: {
+    email: string;
+    password: string;
+  };
+  unlock: {
+    email: string;
+    password: string;
+  };
+}
+export interface PayloadMcpApiKeyAuthOperations {
   forgotPassword: {
     email: string;
     password: string;
@@ -155,6 +201,9 @@ export interface Empresa {
   sector?: string | null;
   logo?: (number | null) | Media;
   contacto?: string | null;
+  /**
+   * Reciben los avisos de caducidad de esta empresa, además de sus administradores.
+   */
   emailsAviso?:
     | {
         email: string;
@@ -162,11 +211,17 @@ export interface Empresa {
       }[]
     | null;
   /**
-   * Sin indicar hereda del nivel superior (Empresa → Categoría → Documento).
+   * Sin indicar hereda del nivel superior (Empresa → Categoría → Documento). Sin ningún nivel: No gestionado.
    */
   gestion?: ('gestionado' | 'no_gestionado') | null;
   tecnico?: (number | null) | User;
+  /**
+   * Baja lógica: bloquea los accesos y conserva el histórico. Se puede reactivar.
+   */
   activa?: boolean | null;
+  adminEmail?: string | null;
+  adminNombre?: string | null;
+  aplicarPlantilla?: boolean | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -207,7 +262,19 @@ export interface User {
         id?: string | null;
       }[]
     | null;
+  /**
+   * Usuarios de empresa: según configure CMC. Super administradores: avisos y resumen semanal.
+   */
   recibeAvisos?: boolean | null;
+  /**
+   * Desactivado: no puede entrar. Nunca se borra, para conservar la trazabilidad.
+   */
+  activo?: boolean | null;
+  totpActivo?: boolean | null;
+  totpSecreto?: string | null;
+  totpPendiente?: string | null;
+  totpUltimoPaso?: number | null;
+  invitacionHash?: string | null;
   updatedAt: string;
   createdAt: string;
   email: string;
@@ -235,17 +302,17 @@ export interface User {
 export interface Categoria {
   id: number;
   /**
-   * ISO, OCA, Licencias, Proyectos…
+   * ISO, OCA, Licencias, Proyectos… Escriba para buscar en el catálogo o añadir un nombre nuevo.
    */
   nombre: string;
   empresa: number | Empresa;
   descripcion?: string | null;
   /**
-   * Vacío = valor de la plataforma (2 meses).
+   * Vacío = valor de la plataforma (2 meses por defecto). Aplica a los documentos nuevos de esta categoría.
    */
   antelacionMeses?: number | null;
   /**
-   * Sin indicar hereda del nivel superior (Empresa → Categoría → Documento).
+   * Sin indicar hereda del nivel superior (Empresa → Categoría → Documento). Sin ningún nivel: No gestionado.
    */
   gestion?: ('gestionado' | 'no_gestionado') | null;
   responsable?: (number | null) | User;
@@ -270,6 +337,9 @@ export interface Documento {
    * Vacío = indefinido (no genera avisos).
    */
   fechaCaducidad?: string | null;
+  /**
+   * Se propone sola; puede fijar otra.
+   */
   fechaAviso?: string | null;
   avisoManual?: boolean | null;
   /**
@@ -280,12 +350,16 @@ export interface Documento {
   motivoEstado?: string | null;
   limiteSubsanacion?: string | null;
   /**
-   * Sin indicar hereda del nivel superior (Empresa → Categoría → Documento).
+   * Sin indicar hereda del nivel superior (Empresa → Categoría → Documento). Sin ningún nivel: No gestionado.
    */
   gestion?: ('gestionado' | 'no_gestionado') | null;
+  /**
+   * Vacío: el responsable de la categoría o de la empresa.
+   */
+  tecnico?: (number | null) | User;
   archivoVigente?: (number | null) | Archivo;
   /**
-   * Todos los archivos asociados. Nunca se borra ninguno.
+   * Todos los archivos asociados. Nunca se borra ninguno. Use «Añadir» para subir una renovación, subsanación o anexo.
    */
   historico?: {
     docs?: (number | Archivo)[];
@@ -305,21 +379,28 @@ export interface Archivo {
   id: number;
   documento: number | Documento;
   /**
-   * Se usa para el control de acceso.
+   * Se toma del documento. Se usa para el control de acceso.
    */
-  empresa: number | Empresa;
+  empresa?: (number | null) | Empresa;
   /**
-   * Campo abierto: Renovación, Actualización, Subsanación, Anexo… o uno nuevo.
+   * Renovación, Actualización, Subsanación, Anexo… o uno nuevo.
    */
   relacion: string;
+  /**
+   * Vacío = el efecto del tipo de relación. Puede corregirlo antes de guardar.
+   */
   efectos?: ('sustituye' | 'actualiza_fechas' | 'levanta' | 'complementario')[] | null;
   nuevaCaducidad?: string | null;
+  /**
+   * Vacío = se calcula.
+   */
   nuevoAviso?: string | null;
   comentario?: string | null;
   /**
    * Sustituido: estado Negro (No aplica).
    */
   historico?: boolean | null;
+  tamanoOriginal?: number | null;
   subidoPor?: (number | null) | User;
   updatedAt: string;
   createdAt: string;
@@ -347,8 +428,23 @@ export interface Envio {
   comentario?: string | null;
   estado?: ('pendiente' | 'publicado' | 'rechazado') | null;
   documentoDestino?: (number | null) | Documento;
+  /**
+   * Vacío = el propuesto (o «Original» en un documento nuevo).
+   */
+  relacionFinal?: string | null;
+  categoriaDestino?: (number | null) | Categoria;
+  tituloFinal?: string | null;
+  fechaEmision?: string | null;
+  fechaCaducidad?: string | null;
+  /**
+   * Vacío = se calcula.
+   */
+  fechaAviso?: string | null;
   motivoRechazo?: string | null;
+  tamanoOriginal?: number | null;
   enviadoPor?: (number | null) | User;
+  resueltoPor?: (number | null) | User;
+  resueltoEn?: string | null;
   updatedAt: string;
   createdAt: string;
   url?: string | null;
@@ -360,6 +456,392 @@ export interface Envio {
   height?: number | null;
   focalX?: number | null;
   focalY?: number | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "hilos".
+ */
+export interface Hilo {
+  id: number;
+  asunto: string;
+  empresa: number | Empresa;
+  categoria?: (number | null) | Categoria;
+  documento?: (number | null) | Documento;
+  estado?: ('abierto' | 'resuelto') | null;
+  asignado?: (number | null) | User;
+  creadoPor?: (number | null) | User;
+  ultimoMensaje?: string | null;
+  mensajes?: {
+    docs?: (number | Mensaje)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "mensajes".
+ */
+export interface Mensaje {
+  id: number;
+  hilo: number | Hilo;
+  texto: string;
+  adjuntos?: (number | Adjunto)[] | null;
+  empresa?: (number | null) | Empresa;
+  autor?: (number | null) | User;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "adjuntos".
+ */
+export interface Adjunto {
+  id: number;
+  empresa: number | Empresa;
+  subidoPor?: (number | null) | User;
+  tamanoOriginal?: number | null;
+  updatedAt: string;
+  createdAt: string;
+  url?: string | null;
+  thumbnailURL?: string | null;
+  filename?: string | null;
+  mimeType?: string | null;
+  filesize?: number | null;
+  width?: number | null;
+  height?: number | null;
+  focalX?: number | null;
+  focalY?: number | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "catalogo".
+ */
+export interface Catalogo {
+  id: number;
+  tipo: 'categoria' | 'documento' | 'relacion';
+  nombre: string;
+  /**
+   * Se propone al asociar un archivo con este tipo; se puede corregir en cada asociación.
+   */
+  efectos?: ('sustituye' | 'actualiza_fechas' | 'levanta' | 'complementario')[] | null;
+  usos?: number | null;
+  /**
+   * Desactivado: deja de sugerirse.
+   */
+  activo?: boolean | null;
+  /**
+   * Todos los elementos que usan este nombre pasan a usar el elegido, y este se desactiva.
+   */
+  fusionarEn?: (number | null) | Catalogo;
+  normalizado?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "correos".
+ */
+export interface Correo {
+  id: number;
+  asunto: string;
+  para: string;
+  usuario?: (number | null) | User;
+  destinatario?: ('cliente' | 'cmc') | null;
+  estado?: ('pendiente' | 'enviado' | 'entregado' | 'abierto' | 'rebotado' | 'error') | null;
+  plantilla?: string | null;
+  texto?: string | null;
+  empresa?: (number | null) | Empresa;
+  documento?: (number | null) | Documento;
+  hilo?: (number | null) | Hilo;
+  idempotencia?: string | null;
+  messageId?: string | null;
+  error?: string | null;
+  enviadoEn?: string | null;
+  entregadoEn?: string | null;
+  abiertoEn?: string | null;
+  reboteEn?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "actividad".
+ */
+export interface Actividad {
+  id: number;
+  accion:
+    | 'login'
+    | 'login_fallido'
+    | 'logout'
+    | 'alta'
+    | 'edicion'
+    | 'baja'
+    | 'subida'
+    | 'descarga'
+    | 'cambio_estado'
+    | 'envio'
+    | 'publicacion'
+    | 'rechazo'
+    | 'mensaje'
+    | 'correo'
+    | 'correo_enviado'
+    | 'correo_entregado'
+    | 'correo_abierto'
+    | 'correo_rebotado'
+    | 'correo_error'
+    | 'permisos'
+    | 'seguridad'
+    | 'exportacion';
+  descripcion: string;
+  usuario?: (number | null) | User;
+  /**
+   * Copia del email en el momento del evento.
+   */
+  email?: string | null;
+  empresa?: (number | null) | Empresa;
+  origen?: ('web' | 'mcp' | 'sistema') | null;
+  coleccion?: string | null;
+  registroId?: string | null;
+  ip?: string | null;
+  userAgent?: string | null;
+  datos?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "originales".
+ */
+export interface Originale {
+  id: number;
+  coleccion?: string | null;
+  registroId?: string | null;
+  empresa?: (number | null) | Empresa;
+  updatedAt: string;
+  createdAt: string;
+  url?: string | null;
+  thumbnailURL?: string | null;
+  filename?: string | null;
+  mimeType?: string | null;
+  filesize?: number | null;
+  width?: number | null;
+  height?: number | null;
+  focalX?: number | null;
+  focalY?: number | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "oauth-clientes".
+ */
+export interface OauthCliente {
+  id: number;
+  clientId: string;
+  nombre: string;
+  redirectUris:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  /**
+   * Impide nuevas autorizaciones de esta aplicación.
+   */
+  bloqueado?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "oauth-codigos".
+ */
+export interface OauthCodigo {
+  id: number;
+  hash: string;
+  clientId: string;
+  usuario: number | User;
+  redirectUri: string;
+  codeChallenge: string;
+  caduca: string;
+  usado?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * Accesos de asistentes de IA. Cada uno actúa con los permisos de su usuario. Borrar = revocar.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payload-mcp-api-keys".
+ */
+export interface PayloadMcpApiKey {
+  id: number;
+  /**
+   * The user that the API key is associated with.
+   */
+  user: number | User;
+  /**
+   * A useful label for the API key.
+   */
+  label?: string | null;
+  /**
+   * The purpose of the API key.
+   */
+  description?: string | null;
+  'payload-mcp-tool'?: {
+    /**
+     * Empresas a las que tiene acceso el usuario, con el semáforo (documentos por estado y peor estado) de cada una.
+     */
+    misEmpresas?: boolean | null;
+    /**
+     * Busca documentos por texto y filtros (empresa, categoría, estado, rango de fechas de caducidad). Estados: verde, amarillo, naranja, rojo (negro solo CMC).
+     */
+    buscarDocumentos?: boolean | null;
+    /**
+     * Documentos que caducan en los próximos N días (30, 60, 90…), además de los caducados y condicionados. Sin empresa: todas las accesibles.
+     */
+    proximosVencimientos?: boolean | null;
+    /**
+     * Ficha completa de un documento: datos, estado, modalidad de gestión, archivo vigente e histórico de archivos asociados.
+     */
+    verDocumento?: boolean | null;
+    /**
+     * Genera un enlace de descarga temporal (10 minutos) del archivo vigente de un documento o de un archivo concreto.
+     */
+    enlaceDescarga?: boolean | null;
+    /**
+     * Enlace temporal para descargar en un ZIP el archivo vigente de varios documentos.
+     */
+    descargarZip?: boolean | null;
+    /**
+     * Enlace temporal al inventario documental de una empresa con su estado, en Excel o PDF.
+     */
+    exportarInventario?: boolean | null;
+    /**
+     * Centro de notificaciones de una empresa: próximos avisos programados y correos enviados.
+     */
+    avisos?: boolean | null;
+    /**
+     * Envíos de documentos a revisión y su estado (pendiente, publicado, rechazado). CMC ve la bandeja de todas las empresas.
+     */
+    listarEnvios?: boolean | null;
+    /**
+     * Conversaciones con CMC. Filtros: empresa, estado (abierto/resuelto) y, para CMC, soloMias (asignadas a mí).
+     */
+    listarConversaciones?: boolean | null;
+    /**
+     * Mensajes de una conversación, en orden.
+     */
+    verConversacion?: boolean | null;
+    /**
+     * Usuarios de una empresa y su rol (solo administradores de esa empresa y CMC).
+     */
+    usuariosDeEmpresa?: boolean | null;
+    /**
+     * Registro de actividad (accesos, subidas, descargas, cambios de estado, correos). CMC: todo; administrador de empresa: sus empresas.
+     */
+    registroActividad?: boolean | null;
+    /**
+     * Busca en los catálogos de nombres (categoria, documento, relacion) antes de crear uno nuevo, sin distinguir mayúsculas ni acentos.
+     */
+    buscarNombreCatalogo?: boolean | null;
+    /**
+     * Almacenamiento consumido, total y por empresa (solo CMC).
+     */
+    almacenamiento?: boolean | null;
+    /**
+     * Envía un documento a CMC para su revisión (los usuarios de empresa no publican directamente). Para una renovación, indique el documento al que se refiere.
+     */
+    enviarDocumentoACmc?: boolean | null;
+    /**
+     * Escribe un mensaje: en una conversación existente o en una nueva (empresa + asunto, opcionalmente vinculada a un documento).
+     */
+    escribirACmc?: boolean | null;
+    /**
+     * Da acceso a un usuario en una empresa (administrador de empresa o CMC). Si el email ya existe, se le añade la empresa.
+     */
+    darDeAltaUsuario?: boolean | null;
+    /**
+     * Retira el acceso de un usuario a una empresa (si se queda sin empresas, se da de baja).
+     */
+    quitarAccesoUsuario?: boolean | null;
+    /**
+     * Cambia el rol (admin/usuario) de un usuario en una empresa.
+     */
+    cambiarRolUsuario?: boolean | null;
+    /**
+     * CMC: da de alta una empresa cliente y su administrador (recibe una invitación por correo). Aplica la plantilla de categorías estándar.
+     */
+    altaEmpresa?: boolean | null;
+    /**
+     * CMC: baja lógica (bloquea los accesos, conserva el histórico) o reactivación de una empresa.
+     */
+    bajaOReactivacionEmpresa?: boolean | null;
+    /**
+     * CMC: crea una categoría en una empresa. Comprueba el catálogo de nombres antes de añadir uno nuevo.
+     */
+    crearCategoria?: boolean | null;
+    /**
+     * CMC: publica un documento nuevo (opcionalmente con su archivo original). La fecha de aviso se propone sola si no se indica.
+     */
+    crearDocumento?: boolean | null;
+    /**
+     * CMC: edita los metadatos de un documento o lo mueve de categoría (queda registrado).
+     */
+    editarDocumento?: boolean | null;
+    /**
+     * CMC: asocia un archivo nuevo a un documento existente (renovación, subsanación, anexo o un tipo nuevo, indicando su efecto). Si sustituye al vigente, el anterior pasa al histórico.
+     */
+    asociarArchivo?: boolean | null;
+    /**
+     * CMC: publica un envío recibido, en un documento existente (documentoDestino) o como documento nuevo (categoria + fechas).
+     */
+    publicarEnvio?: boolean | null;
+    /**
+     * CMC: rechaza un envío recibido indicando el motivo (se avisa al usuario).
+     */
+    rechazarEnvio?: boolean | null;
+    /**
+     * CMC: fija un estado manual (amarillo = condicionada, rojo = revocada, negro = ya no aplica) con su motivo, o lo quita (ninguno).
+     */
+    cambiarEstadoManual?: boolean | null;
+    /**
+     * CMC: marca una empresa, categoría o documento como Gestionado / No gestionado, o lo deja heredar del nivel superior.
+     */
+    cambiarModalidadGestion?: boolean | null;
+    /**
+     * CMC: marca una conversación como abierta o resuelta y/o la asigna a una persona de CMC.
+     */
+    gestionarConversacion?: boolean | null;
+    /**
+     * Enlace temporal al historial de comunicaciones (PDF) de una empresa o de un documento.
+     */
+    exportarComunicaciones?: boolean | null;
+  };
+  origen?: ('oauth' | 'manual') | null;
+  clientId?: string | null;
+  caduca?: string | null;
+  renovacionHash?: string | null;
+  renovacionCaduca?: string | null;
+  ultimoUso?: string | null;
+  updatedAt: string;
+  createdAt: string;
+  enableAPIKey?: boolean | null;
+  apiKey?: string | null;
+  apiKeyIndex?: string | null;
+  hasAPIKey?: boolean | null;
+  collection: 'payload-mcp-api-keys';
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -430,7 +912,7 @@ export interface PayloadJob {
     | {
         executedAt: string;
         completedAt: string;
-        taskSlug: 'inline' | 'recalcularEstados';
+        taskSlug: 'inline' | 'recalcularEstados' | 'resumenSemanal' | 'enviarCorreo';
         taskID: string;
         input?:
           | {
@@ -463,7 +945,7 @@ export interface PayloadJob {
         id?: string | null;
       }[]
     | null;
-  taskSlug?: ('inline' | 'recalcularEstados') | null;
+  taskSlug?: ('inline' | 'recalcularEstados' | 'resumenSemanal' | 'enviarCorreo') | null;
   queue?: string | null;
   waitUntil?: string | null;
   processing?: boolean | null;
@@ -507,18 +989,63 @@ export interface PayloadLockedDocument {
         value: number | Envio;
       } | null)
     | ({
+        relationTo: 'hilos';
+        value: number | Hilo;
+      } | null)
+    | ({
+        relationTo: 'mensajes';
+        value: number | Mensaje;
+      } | null)
+    | ({
+        relationTo: 'adjuntos';
+        value: number | Adjunto;
+      } | null)
+    | ({
         relationTo: 'users';
         value: number | User;
       } | null)
     | ({
+        relationTo: 'catalogo';
+        value: number | Catalogo;
+      } | null)
+    | ({
+        relationTo: 'correos';
+        value: number | Correo;
+      } | null)
+    | ({
+        relationTo: 'actividad';
+        value: number | Actividad;
+      } | null)
+    | ({
         relationTo: 'media';
         value: number | Media;
+      } | null)
+    | ({
+        relationTo: 'originales';
+        value: number | Originale;
+      } | null)
+    | ({
+        relationTo: 'oauth-clientes';
+        value: number | OauthCliente;
+      } | null)
+    | ({
+        relationTo: 'oauth-codigos';
+        value: number | OauthCodigo;
+      } | null)
+    | ({
+        relationTo: 'payload-mcp-api-keys';
+        value: number | PayloadMcpApiKey;
       } | null);
   globalSlug?: string | null;
-  user: {
-    relationTo: 'users';
-    value: number | User;
-  };
+  user:
+    | {
+        relationTo: 'users';
+        value: number | User;
+      }
+    | {
+        relationTo: 'payload-mcp-api-keys';
+        value: number | PayloadMcpApiKey;
+      };
   updatedAt: string;
   createdAt: string;
 }
@@ -528,10 +1055,15 @@ export interface PayloadLockedDocument {
  */
 export interface PayloadPreference {
   id: number;
-  user: {
-    relationTo: 'users';
-    value: number | User;
-  };
+  user:
+    | {
+        relationTo: 'users';
+        value: number | User;
+      }
+    | {
+        relationTo: 'payload-mcp-api-keys';
+        value: number | PayloadMcpApiKey;
+      };
   key?: string | null;
   value?:
     | {
@@ -576,6 +1108,9 @@ export interface EmpresasSelect<T extends boolean = true> {
   gestion?: T;
   tecnico?: T;
   activa?: T;
+  adminEmail?: T;
+  adminNombre?: T;
+  aplicarPlantilla?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -614,6 +1149,7 @@ export interface DocumentosSelect<T extends boolean = true> {
   motivoEstado?: T;
   limiteSubsanacion?: T;
   gestion?: T;
+  tecnico?: T;
   archivoVigente?: T;
   historico?: T;
   observaciones?: T;
@@ -634,6 +1170,7 @@ export interface ArchivosSelect<T extends boolean = true> {
   nuevoAviso?: T;
   comentario?: T;
   historico?: T;
+  tamanoOriginal?: T;
   subidoPor?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -660,8 +1197,67 @@ export interface EnviosSelect<T extends boolean = true> {
   comentario?: T;
   estado?: T;
   documentoDestino?: T;
+  relacionFinal?: T;
+  categoriaDestino?: T;
+  tituloFinal?: T;
+  fechaEmision?: T;
+  fechaCaducidad?: T;
+  fechaAviso?: T;
   motivoRechazo?: T;
+  tamanoOriginal?: T;
   enviadoPor?: T;
+  resueltoPor?: T;
+  resueltoEn?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  url?: T;
+  thumbnailURL?: T;
+  filename?: T;
+  mimeType?: T;
+  filesize?: T;
+  width?: T;
+  height?: T;
+  focalX?: T;
+  focalY?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "hilos_select".
+ */
+export interface HilosSelect<T extends boolean = true> {
+  asunto?: T;
+  empresa?: T;
+  categoria?: T;
+  documento?: T;
+  estado?: T;
+  asignado?: T;
+  creadoPor?: T;
+  ultimoMensaje?: T;
+  mensajes?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "mensajes_select".
+ */
+export interface MensajesSelect<T extends boolean = true> {
+  hilo?: T;
+  texto?: T;
+  adjuntos?: T;
+  empresa?: T;
+  autor?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "adjuntos_select".
+ */
+export interface AdjuntosSelect<T extends boolean = true> {
+  empresa?: T;
+  subidoPor?: T;
+  tamanoOriginal?: T;
   updatedAt?: T;
   createdAt?: T;
   url?: T;
@@ -689,6 +1285,12 @@ export interface UsersSelect<T extends boolean = true> {
         id?: T;
       };
   recibeAvisos?: T;
+  activo?: T;
+  totpActivo?: T;
+  totpSecreto?: T;
+  totpPendiente?: T;
+  totpUltimoPaso?: T;
+  invitacionHash?: T;
   updatedAt?: T;
   createdAt?: T;
   email?: T;
@@ -709,6 +1311,65 @@ export interface UsersSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "catalogo_select".
+ */
+export interface CatalogoSelect<T extends boolean = true> {
+  tipo?: T;
+  nombre?: T;
+  efectos?: T;
+  usos?: T;
+  activo?: T;
+  fusionarEn?: T;
+  normalizado?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "correos_select".
+ */
+export interface CorreosSelect<T extends boolean = true> {
+  asunto?: T;
+  para?: T;
+  usuario?: T;
+  destinatario?: T;
+  estado?: T;
+  plantilla?: T;
+  texto?: T;
+  empresa?: T;
+  documento?: T;
+  hilo?: T;
+  idempotencia?: T;
+  messageId?: T;
+  error?: T;
+  enviadoEn?: T;
+  entregadoEn?: T;
+  abiertoEn?: T;
+  reboteEn?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "actividad_select".
+ */
+export interface ActividadSelect<T extends boolean = true> {
+  accion?: T;
+  descripcion?: T;
+  usuario?: T;
+  email?: T;
+  empresa?: T;
+  origen?: T;
+  coleccion?: T;
+  registroId?: T;
+  ip?: T;
+  userAgent?: T;
+  datos?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "media_select".
  */
 export interface MediaSelect<T extends boolean = true> {
@@ -724,6 +1385,110 @@ export interface MediaSelect<T extends boolean = true> {
   height?: T;
   focalX?: T;
   focalY?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "originales_select".
+ */
+export interface OriginalesSelect<T extends boolean = true> {
+  coleccion?: T;
+  registroId?: T;
+  empresa?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  url?: T;
+  thumbnailURL?: T;
+  filename?: T;
+  mimeType?: T;
+  filesize?: T;
+  width?: T;
+  height?: T;
+  focalX?: T;
+  focalY?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "oauth-clientes_select".
+ */
+export interface OauthClientesSelect<T extends boolean = true> {
+  clientId?: T;
+  nombre?: T;
+  redirectUris?: T;
+  bloqueado?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "oauth-codigos_select".
+ */
+export interface OauthCodigosSelect<T extends boolean = true> {
+  hash?: T;
+  clientId?: T;
+  usuario?: T;
+  redirectUri?: T;
+  codeChallenge?: T;
+  caduca?: T;
+  usado?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payload-mcp-api-keys_select".
+ */
+export interface PayloadMcpApiKeysSelect<T extends boolean = true> {
+  user?: T;
+  label?: T;
+  description?: T;
+  'payload-mcp-tool'?:
+    | T
+    | {
+        misEmpresas?: T;
+        buscarDocumentos?: T;
+        proximosVencimientos?: T;
+        verDocumento?: T;
+        enlaceDescarga?: T;
+        descargarZip?: T;
+        exportarInventario?: T;
+        avisos?: T;
+        listarEnvios?: T;
+        listarConversaciones?: T;
+        verConversacion?: T;
+        usuariosDeEmpresa?: T;
+        registroActividad?: T;
+        buscarNombreCatalogo?: T;
+        almacenamiento?: T;
+        enviarDocumentoACmc?: T;
+        escribirACmc?: T;
+        darDeAltaUsuario?: T;
+        quitarAccesoUsuario?: T;
+        cambiarRolUsuario?: T;
+        altaEmpresa?: T;
+        bajaOReactivacionEmpresa?: T;
+        crearCategoria?: T;
+        crearDocumento?: T;
+        editarDocumento?: T;
+        asociarArchivo?: T;
+        publicarEnvio?: T;
+        rechazarEnvio?: T;
+        cambiarEstadoManual?: T;
+        cambiarModalidadGestion?: T;
+        gestionarConversacion?: T;
+        exportarComunicaciones?: T;
+      };
+  origen?: T;
+  clientId?: T;
+  caduca?: T;
+  renovacionHash?: T;
+  renovacionCaduca?: T;
+  ultimoUso?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  enableAPIKey?: T;
+  apiKey?: T;
+  apiKeyIndex?: T;
+  hasAPIKey?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -799,6 +1564,150 @@ export interface PayloadMigrationsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "configuracion".
+ */
+export interface Configuracion {
+  id: number;
+  /**
+   * La categoría y el documento pueden cambiarla; manda el nivel más concreto.
+   */
+  antelacionMeses?: number | null;
+  recordatorioDiasAntes?: number | null;
+  frecuenciaCaducado?: ('semanal' | 'mensual') | null;
+  /**
+   * En documentos gestionados, el cliente solo recibe el aviso inicial, el de caducidad y la renovación disponible; el resto va al técnico de CMC.
+   */
+  maxRecordatoriosCaducado?: number | null;
+  remitenteNombre?: string | null;
+  /**
+   * Del dominio de CMC (p. ej. avisos@dominio-de-cmc). Vacío = EMAIL_FROM.
+   */
+  remitenteEmail?: string | null;
+  responderA?: string | null;
+  logo?: (number | null) | Media;
+  colorPrimario?: string | null;
+  firma?: string | null;
+  plantillas?: {
+    proxima_no_gestionado?: {
+      asunto?: string | null;
+      cuerpo?: string | null;
+      boton?: string | null;
+    };
+    proxima_gestionado?: {
+      asunto?: string | null;
+      cuerpo?: string | null;
+      boton?: string | null;
+    };
+    proxima_tecnico?: {
+      asunto?: string | null;
+      cuerpo?: string | null;
+      boton?: string | null;
+    };
+    recordatorio_no_gestionado?: {
+      asunto?: string | null;
+      cuerpo?: string | null;
+      boton?: string | null;
+    };
+    recordatorio_tecnico?: {
+      asunto?: string | null;
+      cuerpo?: string | null;
+      boton?: string | null;
+    };
+    caducado_no_gestionado?: {
+      asunto?: string | null;
+      cuerpo?: string | null;
+      boton?: string | null;
+    };
+    caducado_gestionado?: {
+      asunto?: string | null;
+      cuerpo?: string | null;
+      boton?: string | null;
+    };
+    caducado_tecnico?: {
+      asunto?: string | null;
+      cuerpo?: string | null;
+      boton?: string | null;
+    };
+    recordatorio_caducado_no_gestionado?: {
+      asunto?: string | null;
+      cuerpo?: string | null;
+      boton?: string | null;
+    };
+    recordatorio_caducado_tecnico?: {
+      asunto?: string | null;
+      cuerpo?: string | null;
+      boton?: string | null;
+    };
+    renovacion_disponible?: {
+      asunto?: string | null;
+      cuerpo?: string | null;
+      boton?: string | null;
+    };
+    resumen_semanal?: {
+      asunto?: string | null;
+      cuerpo?: string | null;
+      boton?: string | null;
+    };
+    invitacion?: {
+      asunto?: string | null;
+      cuerpo?: string | null;
+      boton?: string | null;
+    };
+    acceso_empresa?: {
+      asunto?: string | null;
+      cuerpo?: string | null;
+      boton?: string | null;
+    };
+    recuperar_password?: {
+      asunto?: string | null;
+      cuerpo?: string | null;
+      boton?: string | null;
+    };
+    envio_recibido?: {
+      asunto?: string | null;
+      cuerpo?: string | null;
+      boton?: string | null;
+    };
+    envio_publicado?: {
+      asunto?: string | null;
+      cuerpo?: string | null;
+      boton?: string | null;
+    };
+    envio_rechazado?: {
+      asunto?: string | null;
+      cuerpo?: string | null;
+      boton?: string | null;
+    };
+    nuevo_mensaje?: {
+      asunto?: string | null;
+      cuerpo?: string | null;
+      boton?: string | null;
+    };
+    almacenamiento?: {
+      asunto?: string | null;
+      cuerpo?: string | null;
+      boton?: string | null;
+    };
+  };
+  ladoMaximo?: number | null;
+  calidad?: number | null;
+  conservarOriginal?: boolean | null;
+  limiteGB?: number | null;
+  avisoPorcentaje?: number | null;
+  plantillaCategorias?:
+    | {
+        nombre: string;
+        antelacionMeses?: number | null;
+        gestion?: ('gestionado' | 'no_gestionado') | null;
+        descripcion?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  updatedAt?: string | null;
+  createdAt?: string | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-jobs-stats".
  */
 export interface PayloadJobsStat {
@@ -814,6 +1723,183 @@ export interface PayloadJobsStat {
     | null;
   updatedAt?: string | null;
   createdAt?: string | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "configuracion_select".
+ */
+export interface ConfiguracionSelect<T extends boolean = true> {
+  antelacionMeses?: T;
+  recordatorioDiasAntes?: T;
+  frecuenciaCaducado?: T;
+  maxRecordatoriosCaducado?: T;
+  remitenteNombre?: T;
+  remitenteEmail?: T;
+  responderA?: T;
+  logo?: T;
+  colorPrimario?: T;
+  firma?: T;
+  plantillas?:
+    | T
+    | {
+        proxima_no_gestionado?:
+          | T
+          | {
+              asunto?: T;
+              cuerpo?: T;
+              boton?: T;
+            };
+        proxima_gestionado?:
+          | T
+          | {
+              asunto?: T;
+              cuerpo?: T;
+              boton?: T;
+            };
+        proxima_tecnico?:
+          | T
+          | {
+              asunto?: T;
+              cuerpo?: T;
+              boton?: T;
+            };
+        recordatorio_no_gestionado?:
+          | T
+          | {
+              asunto?: T;
+              cuerpo?: T;
+              boton?: T;
+            };
+        recordatorio_tecnico?:
+          | T
+          | {
+              asunto?: T;
+              cuerpo?: T;
+              boton?: T;
+            };
+        caducado_no_gestionado?:
+          | T
+          | {
+              asunto?: T;
+              cuerpo?: T;
+              boton?: T;
+            };
+        caducado_gestionado?:
+          | T
+          | {
+              asunto?: T;
+              cuerpo?: T;
+              boton?: T;
+            };
+        caducado_tecnico?:
+          | T
+          | {
+              asunto?: T;
+              cuerpo?: T;
+              boton?: T;
+            };
+        recordatorio_caducado_no_gestionado?:
+          | T
+          | {
+              asunto?: T;
+              cuerpo?: T;
+              boton?: T;
+            };
+        recordatorio_caducado_tecnico?:
+          | T
+          | {
+              asunto?: T;
+              cuerpo?: T;
+              boton?: T;
+            };
+        renovacion_disponible?:
+          | T
+          | {
+              asunto?: T;
+              cuerpo?: T;
+              boton?: T;
+            };
+        resumen_semanal?:
+          | T
+          | {
+              asunto?: T;
+              cuerpo?: T;
+              boton?: T;
+            };
+        invitacion?:
+          | T
+          | {
+              asunto?: T;
+              cuerpo?: T;
+              boton?: T;
+            };
+        acceso_empresa?:
+          | T
+          | {
+              asunto?: T;
+              cuerpo?: T;
+              boton?: T;
+            };
+        recuperar_password?:
+          | T
+          | {
+              asunto?: T;
+              cuerpo?: T;
+              boton?: T;
+            };
+        envio_recibido?:
+          | T
+          | {
+              asunto?: T;
+              cuerpo?: T;
+              boton?: T;
+            };
+        envio_publicado?:
+          | T
+          | {
+              asunto?: T;
+              cuerpo?: T;
+              boton?: T;
+            };
+        envio_rechazado?:
+          | T
+          | {
+              asunto?: T;
+              cuerpo?: T;
+              boton?: T;
+            };
+        nuevo_mensaje?:
+          | T
+          | {
+              asunto?: T;
+              cuerpo?: T;
+              boton?: T;
+            };
+        almacenamiento?:
+          | T
+          | {
+              asunto?: T;
+              cuerpo?: T;
+              boton?: T;
+            };
+      };
+  ladoMaximo?: T;
+  calidad?: T;
+  conservarOriginal?: T;
+  limiteGB?: T;
+  avisoPorcentaje?: T;
+  plantillaCategorias?:
+    | T
+    | {
+        nombre?: T;
+        antelacionMeses?: T;
+        gestion?: T;
+        descripcion?: T;
+        id?: T;
+      };
+  updatedAt?: T;
+  createdAt?: T;
+  globalType?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -841,6 +1927,27 @@ export interface CollectionsWidget {
  */
 export interface TaskRecalcularEstados {
   input?: unknown;
+  output?: unknown;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskResumenSemanal".
+ */
+export interface TaskResumenSemanal {
+  input?: unknown;
+  output?: unknown;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskEnviarCorreo".
+ */
+export interface TaskEnviarCorreo {
+  input: {
+    correo: string;
+    html: string;
+    desde: string;
+    responderA?: string | null;
+  };
   output?: unknown;
 }
 /**

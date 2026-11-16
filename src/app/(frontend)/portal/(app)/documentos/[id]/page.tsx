@@ -3,33 +3,42 @@ import { notFound } from 'next/navigation'
 import { EnviarForm } from '@/components/EnviarForm'
 import { Icon } from '@/components/Icon'
 import { StatusBadge } from '@/components/StatusBadge'
-import { fmt, requireUser } from '@/lib/payload'
 import { resolverGestion, type Estado } from '@/lib/estado'
-import type { Archivo, Categoria, Empresa } from '@/payload-types'
+import { tamano } from '@/lib/subidas'
+import { contexto, fmt, fmtHora } from '@/lib/payload'
+import type { Archivo, Categoria, Empresa, User } from '@/payload-types'
 
 export default async function DocumentoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const { payload, user } = await requireUser()
+  const { payload, user, cmc } = await contexto(`/portal/documentos/${id}`)
   const doc = await payload.findByID({ collection: 'documentos', id, user, overrideAccess: false, depth: 1 }).catch(() => null)
   if (!doc) notFound()
 
   const empresa = doc.empresa as Empresa
   const categoria = doc.categoria as Categoria
-  const archivos = await payload.find({ collection: 'archivos', user, overrideAccess: false, depth: 1, limit: 100, sort: '-createdAt', where: { documento: { equals: doc.id } } })
+  const [archivos, hilos] = await Promise.all([
+    payload.find({ collection: 'archivos', user, overrideAccess: false, depth: 1, limit: 200, sort: '-createdAt', where: { documento: { equals: doc.id } } }),
+    payload.find({ collection: 'hilos', user, overrideAccess: false, depth: 0, limit: 50, sort: '-ultimoMensaje', where: { documento: { equals: doc.id } } }),
+  ])
   const vigente = archivos.docs.find((a) => !a.historico)
   const gestion = resolverGestion(empresa?.gestion, categoria?.gestion, doc.gestion)
+  const tecnico = [doc.tecnico, categoria?.responsable, empresa?.tecnico].find((t) => t && typeof t === 'object') as User | undefined
 
   return (
     <>
       <nav aria-label="Ruta" className="row small muted" style={{ gap: 8 }}>
-        <Link href={`/portal?empresa=${empresa.id}`}>Panel</Link><span aria-hidden="true">/</span><span>{categoria?.nombre}</span><span aria-hidden="true">/</span><span>{doc.titulo}</span>
+        <Link href={`/portal?empresa=${empresa.id}`}>{empresa.razonSocial}</Link>
+        <span aria-hidden="true">/</span>
+        <Link href={`/portal/documentos?empresa=${empresa.id}&categoria=${categoria?.id}`}>{categoria?.nombre}</Link>
+        <span aria-hidden="true">/</span>
+        <span>{doc.titulo}</span>
       </nav>
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
-        <div className="stack" style={{ gap: 8, minWidth: 0 }}>
+        <div className="stack" style={{ gap: 8, minWidth: 0, flex: '1 1 420px' }}>
           <div className="row" style={{ gap: 8 }}>
             <StatusBadge estado={doc.estado as Estado} />
-            {doc.estadoManual === 'amarillo' && doc.estado === 'naranja' && <StatusBadge estado="amarillo" />}
-            {gestion === 'gestionado' && <span className="tag">Gestionado por CMC</span>}
+            {doc.estadoManual === 'amarillo' && doc.estado !== 'amarillo' && <StatusBadge estado="amarillo" />}
+            <span className="tag">{gestion === 'gestionado' ? 'Gestionado por CMC' : 'No gestionado'}</span>
           </div>
           <h1>{doc.titulo}</h1>
           <p className="muted">
@@ -37,9 +46,18 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
               ? 'CMC se encarga de la renovación. No necesita hacer nada: le avisaremos cuando el nuevo documento esté disponible.'
               : 'Usted gestiona la renovación de este documento. Cuando disponga del nuevo, envíelo a CMC desde esta página.'}
           </p>
-          {doc.estadoManual && doc.motivoEstado && <p className="small"><strong>Motivo:</strong> {doc.motivoEstado}</p>}
+          {doc.estadoManual && doc.motivoEstado && (
+            <p className="alert" style={{ background: 'var(--surface-sunken)' }}>
+              <strong>Motivo:</strong> {doc.motivoEstado}
+              {doc.limiteSubsanacion && <> · Subsanar antes del {fmt(doc.limiteSubsanacion)}</>}
+            </p>
+          )}
         </div>
-        {vigente?.url && <a href={vigente.url} className="btn btn--primary" download><Icon name="download" />Descargar</a>}
+        <div className="row">
+          {vigente?.url && <a href={vigente.url} className="btn btn--primary" download><Icon name="download" />Descargar</a>}
+          <Link href={`/portal/mensajes/nuevo?empresa=${empresa.id}&documento=${doc.id}`} className="btn btn--secondary"><Icon name="chat" />Preguntar a CMC</Link>
+          {cmc && <a href={`/admin/collections/documentos/${doc.id}`} className="btn btn--secondary"><Icon name="settings" />Editar</a>}
+        </div>
       </div>
 
       <div className="row" style={{ gap: 24, alignItems: 'flex-start' }}>
@@ -53,7 +71,9 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
               <div><dt>Fecha de emisión</dt><dd>{fmt(doc.fechaEmision)}</dd></div>
               <div><dt>Fecha de caducidad</dt><dd>{doc.fechaCaducidad ? fmt(doc.fechaCaducidad) : 'Indefinido'}</dd></div>
               <div><dt>Fecha de aviso</dt><dd>{fmt(doc.fechaAviso)}</dd></div>
+              {tecnico && <div><dt>Técnico de CMC</dt><dd>{tecnico.nombre}</dd></div>}
             </dl>
+            {doc.observaciones && <p className="small">{doc.observaciones}</p>}
           </section>
 
           {vigente && (
@@ -62,16 +82,34 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
               <div className="file">
                 <Icon name="file" />
                 <span className="file__name">{vigente.filename}</span>
-                <span className="muted">{vigente.relacion}</span>
+                <span className="muted">{vigente.relacion} · {tamano(vigente.filesize)}</span>
                 {vigente.url && <a className="btn btn--secondary btn--sm" href={vigente.url} target="_blank" rel="noreferrer">Previsualizar</a>}
               </div>
             </section>
           )}
 
           <section className="card stack">
-            <h2 style={{ fontSize: 22, lineHeight: '28px' }}>Enviar archivo a CMC</h2>
-            <EnviarForm empresaId={String(empresa.id)} documentoId={String(doc.id)} tituloPorDefecto={doc.titulo} />
+            <div className="row" style={{ justifyContent: 'space-between' }}>
+              <h2 style={{ fontSize: 22, lineHeight: '28px' }}>Conversaciones sobre este documento</h2>
+              {hilos.totalDocs > 0 && <a className="small" href={`/api/comunicaciones/${empresa.id}?documento=${doc.id}`}>Exportar historial (PDF)</a>}
+            </div>
+            {hilos.docs.length === 0 && <p className="muted">Ninguna todavía.</p>}
+            {hilos.docs.map((h) => (
+              <Link key={h.id} href={`/portal/mensajes/${h.id}`} className="file" style={{ textDecoration: 'none', color: 'inherit' }}>
+                <Icon name="chat" />
+                <span className="file__name">{h.asunto}</span>
+                <span className="muted">{fmtHora(h.ultimoMensaje)}</span>
+                <span className={`status status--${h.estado === 'resuelto' ? 'verde' : 'naranja'}`}>{h.estado === 'resuelto' ? 'Resuelto' : 'Abierto'}</span>
+              </Link>
+            ))}
           </section>
+
+          {!cmc && (
+            <section className="card stack">
+              <h2 style={{ fontSize: 22, lineHeight: '28px' }}>Enviar archivo a CMC</h2>
+              <EnviarForm empresaId={String(empresa.id)} documentoId={String(doc.id)} tituloPorDefecto={doc.titulo} />
+            </section>
+          )}
         </div>
 
         <aside className="card stack" style={{ flex: '1 1 320px', minWidth: 0 }}>
@@ -82,7 +120,7 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
               <li key={a.id}>
                 <span className={`dot${a.historico ? ' dot--negro' : ''}`} aria-hidden="true" />
                 <div className="stack" style={{ gap: 0 }}>
-                  <strong>{a.relacion}{a.historico ? ' · No aplica' : ' · Vigente'}</strong>
+                  <strong>{a.relacion}{a.historico ? ' · Histórico' : ' · Vigente'}</strong>
                   <span className="muted">{fmt(a.createdAt)}{typeof a.subidoPor === 'object' && a.subidoPor ? ` · ${a.subidoPor.nombre}` : ''}</span>
                   {a.url && <a href={a.url} target="_blank" rel="noreferrer">{a.filename}</a>}
                   {a.comentario && <span className="muted">{a.comentario}</span>}

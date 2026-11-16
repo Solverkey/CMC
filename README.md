@@ -1,56 +1,68 @@
-# CMC · Web pública + Portal documental
+# CMC · Portal documental
 
-Plantilla en **Next.js 16 + Payload CMS 3**, con el sistema de diseño de CMC. Basada en el *Informe funcional — Portal documental CMC v1.0*.
+Portal documental de CMC en **Next.js 16 + Payload CMS 3**, según el *Informe funcional — Portal documental CMC v1.0* (Solverkey). No hay web pública: `/` lleva directamente al portal.
 
-## Arrancar
+## Arrancar en local
 
 ```bash
-cp .env.example .env        # y cambia PAYLOAD_SECRET
+cp .env.example .env        # cambie PAYLOAD_SECRET; en local añada CMC_2FA_SUPERADMIN=opcional
 npm install
-npm run seed                # datos de demo
+npm run seed                # catálogo inicial, super administrador y empresa de demo
 npm run dev                 # http://localhost:3000
 ```
 
-| URL | Qué es |
-|---|---|
-| `/` | Web pública (inicio, servicios, portal, clientes, contacto) |
-| `/portal/login` | Acceso de clientes |
-| `/portal` | Panel con semáforo, próximos vencimientos (30/60/90 días) y estado por categoría |
-| `/portal/documentos/:id` | Ficha: datos, archivo vigente, histórico y envío de renovación |
-| `/portal/enviar` | Envío de documentos a CMC y estado de los envíos |
-| `/admin` | Panel de Payload, solo para CMC (super administrador) |
+En local la base de datos es SQLite (`cmc.db`), los archivos se guardan en `./uploads` y los correos se muestran en la consola.
+Usuarios del seed (contraseña `CambiarEsto2026` o `SEED_PASSWORD`): `admin@cmc.test` (CMC) y `cliente@empresa-demo.test` (administradora de la empresa de demo).
 
-Usuarios de demo (contraseña `cambiar-esto`): `admin@cmc.test` (CMC) y `cliente@empresa-demo.test` (administradora de empresa).
+## Producción
 
-## Modelo de datos (`src/collections`)
+Todo se activa por variables de entorno (ver `.env.example`):
 
-- **empresas**: clientes de CMC. Baja lógica (`activa`) y modalidad de gestión.
-- **users**: rol global (`superadmin` / `cliente`) más `empresas[]` con un rol por empresa (multiempresa).
-- **categorias**: por empresa, con su antelación de aviso propia.
-- **documentos**: la «ficha». Al guardar se calculan `fechaAviso` (caducidad − antelación; 2 meses por defecto) y `estado`.
-- **archivos** (upload): versiones y anexos de un documento. El tipo de relación es texto libre y sus efectos (sustituye, actualiza fechas, levanta condición, complementario) actualizan el documento. Nunca se borra nada: lo sustituido pasa a `historico`.
-- **envios** (upload): bandeja de revisión. El cliente envía; CMC publica en un documento (se crea el archivo asociado) o rechaza con motivo.
-- **media**: imágenes públicas y logotipos.
+| Pieza | Variable | Qué hace |
+|---|---|---|
+| Base de datos | `DATABASE_URL=postgres://…` | Postgres en un servidor de la UE. Al arrancar se aplican las migraciones de `src/migrations`. |
+| Archivos | `S3_BUCKET`, `S3_REGION`… | S3 (o compatible) en la UE, privado, con enlaces de descarga temporales. |
+| Correo | `SMTP_HOST`, `EMAIL_FROM`… | Envío por SMTP con el dominio de CMC (configure SPF, DKIM y DMARC en el DNS). |
+| Seguimiento de correo | `EMAIL_WEBHOOK_SECRET` | Webhook `/api/correos/eventos` para entregado, abierto y rebotado. |
+| Dirección pública | `NEXT_PUBLIC_SERVER_URL` | Enlaces de los correos y OAuth del servidor MCP. |
 
-Toda la lógica del semáforo está en `src/lib/estado.ts`. Hay una tarea nocturna (`src/jobs/recalcularEstados.ts`, 03:00) que recalcula los estados.
+En producción el doble factor es siempre obligatorio para los super administradores. Al cambiar el modelo de datos hay que crear una migración: `DATABASE_URL=postgres://… npm run migrate:create nombre`.
 
-## Seguridad ya incluida
+## Qué hay en el portal
 
-- El aislamiento por empresa se aplica en el servidor (`src/access`). El portal consulta siempre con `overrideAccess: false`.
-- Los archivos se sirven por `/api/archivos/file/...` con control de acceso: sin sesión devuelve 403.
-- La cuenta se bloquea 15 minutos tras 5 intentos de acceso fallidos.
-- Las imágenes se comprimen al subirlas: lado mayor de 2.500 px y formato WebP. Los PDF y los Office no se tocan.
+| URL | Qué es | Requisito |
+|---|---|---|
+| `/portal` | Panel con semáforo y vencimientos a 30, 60 y 90 días; vista consolidada multiempresa y panel de CMC por empresa | RF-14, RF-15 |
+| `/portal/documentos` | Buscador con filtros, descarga en ZIP y exportación del inventario a Excel o PDF | RF-09, RF-16, RF-19 |
+| `/portal/documentos/:id` | Ficha, archivo vigente, histórico, conversaciones y envío de renovaciones | RF-05, RF-08 |
+| `/portal/enviar` | Envío a CMC (cliente) y bandeja de revisión (CMC) | RF-25 |
+| `/portal/mensajes` | Canal de comunicación por conversaciones, con adjuntos, estado, asignación y exportación | RF-26 |
+| `/portal/avisos` | Avisos programados y correos enviados, con su estado de entrega | RF-17, RF-18 |
+| `/portal/usuarios` | El administrador de empresa invita, cambia roles y retira accesos | RF-03, RF-04 |
+| `/portal/actividad` | Registro de actividad inalterable (también lo hecho desde la IA) | RF-20 |
+| `/portal/almacenamiento` | Espacio usado, por empresa, y aviso al acercarse al límite | RF-23 |
+| `/portal/asistentes` | Conexión de asistentes de IA (MCP) y revocación de accesos | RF-27 |
+| `/portal/seguridad` | Doble factor y contraseña | RF-01 |
+| `/admin` | Panel de Payload para CMC: empresas, categorías, documentos, catálogos y la **Configuración** global (avisos, plantillas de correo, imágenes, almacenamiento, plantilla de categorías) | RF-06, RF-21, RF-22, RF-28 |
 
-Comprobado: build OK; login; un cliente no ve ni puede enviar a otra empresa; al publicar una renovación cambian las fechas y el estado; un JPG de 4000×3000 se guarda como WebP de 2500×1875.
+## Servidor MCP (RF-27)
 
-## Pendiente (siguientes fases)
+Dirección: `https://<portal>/api/mcp`. El asistente se autoriza con OAuth 2.1 + PKCE: el usuario entra en el portal y acepta. También se puede crear una clave manual en `/portal/asistentes`.
+El asistente actúa siempre con los permisos del usuario, pide confirmación (`confirmar=true`) para las acciones importantes y todo queda en el registro con origen «Asistente de IA».
+Las herramientas están en `src/mcp/herramientas.ts` y usan los mismos servicios que el portal (`src/servicios`).
 
-- [ ] Producción: `@payloadcms/db-postgres` y almacenamiento S3-compatible en la UE (`@payloadcms/storage-s3`), con cifrado en reposo.
-- [ ] Correo (RF-17, RF-21): adaptador de email transaccional con dominio CMC (SPF/DKIM/DMARC), plantillas Gestionado / No gestionado y secuencia de recordatorios. El punto de enganche es el `TODO` de `recalcularEstados.ts`.
-- [ ] 2FA (RF-01): obligatorio para super administradores.
-- [ ] Gestión de usuarios desde el portal para el administrador de empresa (el control de acceso ya lo permite por API).
-- [ ] Canal de comunicación (RF-26), registro de actividad (RF-20), informes Excel/PDF (RF-19), catálogos con autocompletado y deduplicación (RF-28).
-- [ ] Servidor MCP (RF-27).
-- [ ] HEIC: el `sharp` precompilado no decodifica HEIC; hace falta convertirlo en el cliente o usar libvips con libheif.
-- [ ] Formulario de contacto de la web, páginas legales y logos reales de clientes.
-- [ ] Recuperación de contraseña desde el portal: ahora enlaza a `/admin/forgot`.
+## Estructura
+
+- `src/collections`: modelo de datos y reglas (empresas, usuarios, categorías, documentos, archivos, envíos, conversaciones, catálogo, correos, actividad).
+- `src/access`: aislamiento por empresa, que se aplica siempre en el servidor.
+- `src/servicios`: operaciones compartidas por el portal, la API y el MCP.
+- `src/jobs`: recálculo nocturno de estados y avisos (03:00), resumen semanal (lunes 07:00) y cola de correos con reintentos.
+- `src/lib/estado.ts` y `src/lib/avisos.ts`: semáforo y secuencia de recordatorios.
+
+## Pruebas
+
+```bash
+npm run test:int     # lógica, aislamiento entre empresas, permisos y doble factor (base de datos aparte)
+npm run test:e2e     # navegador (E2E_EMAIL y E2E_PASSWORD para la prueba con sesión)
+npm run typecheck
+```
