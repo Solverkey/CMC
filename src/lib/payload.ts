@@ -9,8 +9,9 @@ export const payloadClient = () => getPayload({ config })
 
 /** Usuario de la sesión (cookie de Payload) o redirección al login del portal, volviendo después a `next`. */
 export async function requireUser(next?: string) {
+  const h = await nextHeaders()
   const payload = await payloadClient()
-  const { user } = await payload.auth({ headers: await nextHeaders() })
+  const { user } = await payload.auth({ headers: h })
   if (!user || user.collection !== 'users') redirect(next ? `/portal/login?next=${encodeURIComponent(next)}` : '/portal/login')
   return { payload, user: user as User }
 }
@@ -18,8 +19,7 @@ export async function requireUser(next?: string) {
 /** Sesión y una petición local con ese usuario, para usar los mismos servicios que la API y el servidor MCP. */
 export async function contexto(next?: string) {
   const { payload, user } = await requireUser(next)
-  const h = await nextHeaders()
-  const req = await createLocalReq({ user: { ...user, collection: 'users' } as never, req: { headers: new Headers(h) } as Partial<PayloadRequest> }, payload)
+  const req = await createLocalReq({ user: { ...user, collection: 'users' } as never, req: { headers: new Headers(await nextHeaders()) } as Partial<PayloadRequest> }, payload)
   return { payload, user, req, cmc: esSuperAdmin(user) }
 }
 
