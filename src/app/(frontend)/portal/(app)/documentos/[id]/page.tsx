@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { EnviarForm } from '@/components/EnviarForm'
+import { VisorArchivo } from '@/components/VisorArchivo'
 import { Icon } from '@/components/Icon'
 import { StatusBadge } from '@/components/StatusBadge'
 import { resolverGestion, type Estado } from '@/lib/estado'
@@ -83,8 +84,8 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
                 <Icon name="file" />
                 <span className="file__name">{vigente.filename}</span>
                 <span className="muted">{vigente.relacion} · {tamano(vigente.filesize)}</span>
-                {vigente.url && <a className="btn btn--secondary btn--sm" href={vigente.url} target="_blank" rel="noreferrer">Previsualizar</a>}
               </div>
+              {vigente.url && <VisorArchivo url={vigente.url} nombre={vigente.filename ?? 'documento'} mime={vigente.mimeType} />}
             </section>
           )}
 

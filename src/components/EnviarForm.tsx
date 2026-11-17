@@ -85,9 +85,9 @@ export function EnviarForm({ empresaId, documentoId, tituloPorDefecto }: Props) 
         onDrop={(e) => { e.preventDefault(); setActiva(false); añadir(e.dataTransfer.files) }}
       >
         <span style={{ color: 'var(--slate)' }}><Icon name="upload" size={32} /></span>
-        <strong>Arrastre aquí sus documentos</strong>
-        <span>o <u>selecciónelos en su equipo</u> · PDF, fotos (también del móvil) u Office, hasta 50 MB. Las fotos se optimizan automáticamente.</span>
-        <input ref={input} type="file" multiple hidden accept=".pdf,image/*,.heic,.heif,.doc,.docx,.xls,.xlsx" onChange={(e) => añadir(e.target.files)} />
+        <strong>Arrastre aquí uno o varios documentos</strong>
+        <span>o <u>selecciónelos en su equipo</u> · puede elegir varios a la vez · PDF, fotos (también del móvil) u Office, hasta 50 MB cada uno</span>
+        <input ref={input} type="file" multiple hidden accept=".pdf,image/*,.heic,.heif,.doc,.docx,.xls,.xlsx" onChange={(e) => { añadir(e.target.files); e.target.value = '' }} />
       </div>
 
       {items.map((it, i) => (
@@ -98,6 +98,11 @@ export function EnviarForm({ empresaId, documentoId, tituloPorDefecto }: Props) 
           {it.estado === 'subiendo' && <span className="muted">Subiendo…</span>}
           {it.estado === 'ok' && <span className="status status--verde">{it.msg}</span>}
           {it.estado === 'error' && <span className="status status--rojo">{it.msg}</span>}
+          {it.estado === 'pendiente' && (
+            <button type="button" className="enlace" aria-label={`Quitar ${it.file.name}`} onClick={() => setItems((p) => p.filter((_, j) => j !== i))}>
+              Quitar
+            </button>
+          )}
         </div>
       ))}
 

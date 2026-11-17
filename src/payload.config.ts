@@ -42,7 +42,14 @@ const databaseURL = process.env.DATABASE_URL || 'file:./cmc.db'
 // Producción: Postgres en un servidor de la UE (DATABASE_URL=postgres://…). Local: SQLite en un fichero.
 const db = /^postgres(ql)?:\/\//.test(databaseURL)
   ? postgresAdapter({
-      pool: { connectionString: databaseURL, ssl: process.env.DATABASE_SSL === 'false' ? false : process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined },
+      pool: {
+        connectionString: databaseURL,
+        // El pooler de Supabase en modo sesión admite pocas conexiones. Una por proceso basta.
+        max: 1,
+        idleTimeoutMillis: 10000,
+        allowExitOnIdle: true,
+        ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
+      },
       migrationDir: path.resolve(dirname, 'migrations'),
       // En producción el esquema se crea y actualiza con las migraciones al arrancar.
       prodMigrations: migrations,
