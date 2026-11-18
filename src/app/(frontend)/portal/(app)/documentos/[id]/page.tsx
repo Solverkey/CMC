@@ -38,7 +38,7 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
         <div className="stack" style={{ gap: 8, minWidth: 0, flex: '1 1 420px' }}>
           <div className="row" style={{ gap: 8 }}>
             <StatusBadge estado={doc.estado as Estado} />
-            {doc.estadoManual === 'amarillo' && doc.estado !== 'amarillo' && <StatusBadge estado="amarillo" />}
+            {doc.estadoManual === 'naranja' && doc.estado !== 'naranja' && <StatusBadge estado="naranja" />}
             <span className="tag">{gestion === 'gestionado' ? 'Gestionado por CMC' : 'No gestionado'}</span>
           </div>
           <h1>{doc.titulo}</h1>
@@ -108,7 +108,7 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
           {!cmc && (
             <section className="card stack">
               <h2 style={{ fontSize: 22, lineHeight: '28px' }}>Enviar archivo a CMC</h2>
-              <EnviarForm empresaId={String(empresa.id)} documentoId={String(doc.id)} tituloPorDefecto={doc.titulo} />
+              <EnviarForm empresaId={String(empresa.id)} documentoId={String(doc.id)} tituloPorDefecto={doc.titulo} categoriaId={categoria?.id ? String(categoria.id) : undefined} />
             </section>
           )}
         </div>
@@ -119,7 +119,7 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
             {archivos.docs.length === 0 && <li className="muted">Sin archivos todavía.</li>}
             {archivos.docs.map((a: Archivo) => (
               <li key={a.id}>
-                <span className={`dot${a.historico ? ' dot--negro' : ''}`} aria-hidden="true" />
+                <span className={`dot${a.historico ? ' dot--azul' : ''}`} aria-hidden="true" />
                 <div className="stack" style={{ gap: 0 }}>
                   <strong>{a.relacion}{a.historico ? ' · Histórico' : ' · Vigente'}</strong>
                   <span className="muted">{fmt(a.createdAt)}{typeof a.subidoPor === 'object' && a.subidoPor ? ` · ${a.subidoPor.nombre}` : ''}</span>

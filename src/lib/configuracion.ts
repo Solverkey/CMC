@@ -43,7 +43,7 @@ export async function leerConfiguracion(payload: Payload, req?: PayloadRequest):
     conservarOriginal: Boolean(g.conservarOriginal),
     limiteGB: num(g.limiteGB, 10),
     avisoPorcentaje: num(g.avisoPorcentaje, 80),
-    plantillaCategorias: Array.isArray(g.plantillaCategorias) && g.plantillaCategorias.length ? g.plantillaCategorias : [{ nombre: 'Certificados ISO' }, { nombre: 'Inspecciones OCA' }, { nombre: 'Licencias' }, { nombre: 'Proyectos' }],
+    plantillaCategorias: Array.isArray(g.plantillaCategorias) && g.plantillaCategorias.length ? g.plantillaCategorias : [{ nombre: 'Alta tensión' }, { nombre: 'Baja tensión' }],
     plantilla: (clave) => {
       const base = PLANTILLAS[clave]
       const p = plantillas[clave] ?? {}

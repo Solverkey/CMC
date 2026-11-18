@@ -90,13 +90,13 @@ export const Configuracion: GlobalConfig = {
         },
         {
           label: 'Plantilla de categorías',
-          description: 'Categorías estándar de CMC que se crean al dar de alta una empresa (se pueden adaptar después).',
+          description: 'Tipos de instalación que se crean al dar de alta una empresa. La lista definitiva la confirma CMC; después se puede adaptar en cada empresa.',
           fields: [
             {
               name: 'plantillaCategorias',
               label: 'Categorías',
               type: 'array',
-              defaultValue: [{ nombre: 'Certificados ISO' }, { nombre: 'Inspecciones OCA' }, { nombre: 'Licencias' }, { nombre: 'Proyectos' }],
+              defaultValue: [{ nombre: 'Alta tensión' }, { nombre: 'Baja tensión' }],
               fields: [
                 {
                   type: 'row',

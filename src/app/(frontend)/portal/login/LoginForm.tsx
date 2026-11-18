@@ -1,6 +1,7 @@
 'use client'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { CampoPassword } from '@/components/CampoPassword'
 
 /** Solo rutas internas, para no redirigir fuera del portal. */
 const destinoSeguro = (next?: string) => (next && next.startsWith('/') && !next.startsWith('//') ? next : '/portal')
@@ -45,7 +46,7 @@ export function LoginForm({ next }: { next?: string }) {
     <form className="stack" onSubmit={onSubmit}>
       {error && <p role="alert" className="alert alert--error">{error}</p>}
       <div className="field" hidden={pedirCodigo}><label htmlFor="email">Correo electrónico</label><input id="email" name="email" type="email" autoComplete="email" required /></div>
-      <div className="field" hidden={pedirCodigo}><label htmlFor="password">Contraseña</label><input id="password" name="password" type="password" autoComplete="current-password" required /></div>
+      <div hidden={pedirCodigo}><CampoPassword id="password" name="password" label="Contraseña" /></div>
       {pedirCodigo && (
         <div className="field">
           <label htmlFor="codigo">Código de verificación</label>

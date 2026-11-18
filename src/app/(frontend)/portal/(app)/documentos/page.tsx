@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { BotonZip, MarcarTodos } from '@/components/BotonZip'
 import { Icon } from '@/components/Icon'
 import { StatusBadge } from '@/components/StatusBadge'
-import { resolverGestion, type Estado } from '@/lib/estado'
+import { ESTADOS, resolverGestion, type Estado } from '@/lib/estado'
 import { contexto, diasHasta, empresasDelUsuario, fmt } from '@/lib/payload'
 import type { Categoria, Documento, Empresa } from '@/payload-types'
 import { buscarDocumentos } from '@/servicios/documentos'
@@ -11,22 +11,17 @@ export const metadata = { title: 'Documentos' }
 
 type SP = { q?: string; empresa?: string; categoria?: string; estado?: string | string[]; desde?: string; hasta?: string; pagina?: string; orden?: string }
 
-const ESTADOS: { v: Estado; t: string }[] = [
-  { v: 'verde', t: 'Vigente' },
-  { v: 'amarillo', t: 'Condicionado' },
-  { v: 'naranja', t: 'Caducidad próxima' },
-  { v: 'rojo', t: 'Caducado' },
-]
+const FILTROS: Estado[] = ['verde', 'amarillo', 'naranja', 'rojo', 'azul', 'negro']
 
 export default async function DocumentosPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams
-  const { payload, user, req, cmc } = await contexto('/portal/documentos')
+  const { payload, user, req } = await contexto('/portal/documentos')
   const { empresas } = await empresasDelUsuario(user)
   const estados = ([] as string[]).concat(sp.estado ?? []).filter(Boolean) as Estado[]
   const pagina = Math.max(Number(sp.pagina) || 1, 1)
 
   const [r, categorias] = await Promise.all([
-    buscarDocumentos(req, { q: sp.q, empresa: sp.empresa, categoria: sp.categoria, estados, desde: sp.desde, hasta: sp.hasta, incluirNegros: cmc && estados.includes('negro'), limite: 50, pagina, orden: sp.orden || 'fechaCaducidad' }),
+    buscarDocumentos(req, { q: sp.q, empresa: sp.empresa, categoria: sp.categoria, estados, desde: sp.desde, hasta: sp.hasta, limite: 50, pagina, orden: sp.orden || 'fechaCaducidad' }),
     sp.empresa ? payload.find({ collection: 'categorias', where: { empresa: { equals: sp.empresa } }, user, overrideAccess: false, depth: 0, limit: 500, sort: 'nombre' }) : null,
   ])
   const docs = r.docs as Documento[]
@@ -87,18 +82,12 @@ export default async function DocumentosPage({ searchParams }: { searchParams: P
         </div>
         <fieldset className="row" style={{ border: 0, padding: 0, margin: 0 }}>
           <legend className="sr-only">Estado</legend>
-          {ESTADOS.map((e) => (
-            <label key={e.v} className="row small" style={{ gap: 6 }}>
-              <input type="checkbox" name="estado" value={e.v} defaultChecked={estados.includes(e.v)} />
-              <span className={`status status--${e.v}`}>{e.t}</span>
+          {FILTROS.map((e) => (
+            <label key={e} className="row small" style={{ gap: 6 }}>
+              <input type="checkbox" name="estado" value={e} defaultChecked={estados.includes(e)} />
+              <span className={`status status--${e}`}>{ESTADOS[e].label}</span>
             </label>
           ))}
-          {cmc && (
-            <label className="row small" style={{ gap: 6 }}>
-              <input type="checkbox" name="estado" value="negro" defaultChecked={estados.includes('negro')} />
-              <span className="status status--negro">No aplica</span>
-            </label>
-          )}
           <button className="btn btn--primary btn--sm" style={{ marginLeft: 'auto' }}><Icon name="search" />Buscar</button>
         </fieldset>
       </form>

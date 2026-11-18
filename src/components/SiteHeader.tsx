@@ -27,9 +27,8 @@ export function SiteHeader() {
   return (
     <header className="site-header">
       <div className="container">
-        <Link href="/" className="wordmark" aria-label="CMC, inicio">
-          <b>CMC</b>
-          <span>Consultoría de calidad y medio ambiente</span>
+        <Link href="/" className="wordmark" aria-label="CMC, consultoría de calidad y medio ambiente">
+          <img src="/marca/cmc.png" alt="" width={408} height={112} />
         </Link>
         <Navegacion etiqueta="Principal" className="nav nav--escritorio" />
         <MenuMovil>
@@ -45,8 +44,8 @@ export function SiteFooter({ web }: { web: DatosWeb }) {
     <footer className="site-footer">
       <div className="container site-footer__grid">
         <div className="stack" style={{ gap: 8 }}>
-          <span className="site-footer__marca">CMC</span>
-          <span>Consultoría de calidad y medio ambiente desde 2000</span>
+          <img className="site-footer__marca" src="/marca/cmc-blanco.png" alt="CMC, consultoría de calidad y medio ambiente" width={408} height={112} />
+          <span>Desde 2000</span>
           <a href={`mailto:${web.email}`}>{web.email}</a>
         </div>
         {web.sedes.map((s) => (

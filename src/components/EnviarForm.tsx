@@ -3,18 +3,19 @@ import { useRef, useState } from 'react'
 import { Combobox } from './Combobox'
 import { Icon } from './Icon'
 
-type Props = { empresaId: string; documentoId?: string; tituloPorDefecto?: string }
+type Props = { empresaId: string; documentoId?: string; tituloPorDefecto?: string; categoriaId?: string; categorias?: { id: string; nombre: string }[] }
 type Item = { file: File; estado: 'pendiente' | 'subiendo' | 'ok' | 'error'; msg?: string }
 
 const kb = (n: number) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1).replace('.', ',')} MB` : `${Math.round(n / 1024)} KB`)
 const MAX = 50 * 1024 * 1024
 
 /** Envío de documentos a la bandeja de revisión de CMC (RF-25) con subida múltiple (RF-08). */
-export function EnviarForm({ empresaId, documentoId, tituloPorDefecto }: Props) {
+export function EnviarForm({ empresaId, documentoId, tituloPorDefecto, categoriaId, categorias = [] }: Props) {
   const input = useRef<HTMLInputElement>(null)
   const [items, setItems] = useState<Item[]>([])
   const [activa, setActiva] = useState(false)
   const [enviando, setEnviando] = useState(false)
+  const [categoria, setCategoria] = useState(categoriaId ?? '')
 
   const añadir = (files: FileList | null) => {
     if (!files) return
@@ -60,7 +61,7 @@ export function EnviarForm({ empresaId, documentoId, tituloPorDefecto }: Props) 
       <div className="row" style={{ gap: 16, alignItems: 'stretch' }}>
         <div className="field" style={{ flex: '1 1 220px' }}>
           <label htmlFor="titulo">Nombre del documento</label>
-          <Combobox tipo="documento" id="titulo" name="titulo" defaultValue={tituloPorDefecto} placeholder="Ej.: Inspección OCA baja tensión" />
+          <Combobox tipo="documento" id="titulo" name="titulo" defaultValue={tituloPorDefecto} placeholder="Ej.: Inspección de baja tensión" categoria={categoria || undefined} />
         </div>
         <div className="field" style={{ flex: '1 1 180px' }}>
           <label htmlFor="relacion">Tipo de relación</label>
@@ -72,6 +73,16 @@ export function EnviarForm({ empresaId, documentoId, tituloPorDefecto }: Props) 
           <span className="hint">CMC la revisa antes de publicar.</span>
         </div>
       </div>
+      {!categoriaId && categorias.length > 0 && (
+        <div className="field">
+          <label htmlFor="categoria-nombre">Categoría</label>
+          <select id="categoria-nombre" value={categoria} onChange={(e) => setCategoria(e.target.value)}>
+            <option value="">Sin indicar</option>
+            {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+          </select>
+          <span className="hint">Si la indica, el nombre prioriza los ya usados en esa categoría. CMC la confirma al publicar.</span>
+        </div>
+      )}
       <div className="field"><label htmlFor="comentario">Comentario para CMC</label><textarea id="comentario" name="comentario" rows={2} /></div>
 
       <div

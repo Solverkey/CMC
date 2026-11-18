@@ -3,7 +3,9 @@ import Link from 'next/link'
 import { Icon } from '@/components/Icon'
 import { StatusBadge } from '@/components/StatusBadge'
 import { BandaContacto, IconoArea } from '@/components/web/Bloques'
+import { CarruselPortada } from '@/components/web/CarruselPortada'
 import { payloadClient } from '@/lib/payload'
+import { videosRemotos, videosSueltos } from '@/lib/portada'
 import { AREAS, areaDe, clientesDe, leerWeb, serviciosPublicados, trabajosPublicados, type Area } from '@/lib/web'
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -17,6 +19,7 @@ export default async function Inicio() {
   const destacados = (servicios.filter((s) => s.destacado).length ? servicios.filter((s) => s.destacado) : servicios).slice(0, 6)
   const clientes = clientesDe(trabajos)
   const { portada } = web
+  const videos = [...new Set([...(await videosRemotos()), ...portada.videos, ...videosSueltos()])]
 
   const datosEstructurados = {
     '@context': 'https://schema.org',
@@ -46,16 +49,18 @@ export default async function Inicio() {
               <Link href="/servicios" className="btn btn--claro">Ver servicios</Link>
             </div>
           </div>
-          {portada.imagen?.url ? (
-            // eslint-disable-next-line @next/next/no-img-element -- la imagen puede venir de S3
-            <img className="hero__foto" src={portada.imagen.url} alt={portada.imagen.alt} />
-          ) : (
-            <div className="hero__art" aria-hidden="true">
-              <div style={{ flex: 1.2, height: '100%', background: 'var(--slate)' }} />
-              <div style={{ flex: 1, height: '62%', background: 'var(--olive)' }} />
-              <div style={{ flex: 0.8, height: '82%', background: 'var(--slate-soft)' }} />
-            </div>
-          )}
+          <CarruselPortada fuentes={videos}>
+            {portada.imagen?.url ? (
+              // eslint-disable-next-line @next/next/no-img-element -- la imagen puede venir de S3
+              <img className="hero__foto" src={portada.imagen.url} alt={portada.imagen.alt} />
+            ) : (
+              <div className="hero__art" aria-hidden="true">
+                <div style={{ flex: 1.2, height: '100%', background: 'var(--slate)' }} />
+                <div style={{ flex: 1, height: '62%', background: 'var(--olive)' }} />
+                <div style={{ flex: 0.8, height: '82%', background: 'var(--slate-soft)' }} />
+              </div>
+            )}
+          </CarruselPortada>
         </div>
       </section>
 
@@ -105,7 +110,7 @@ export default async function Inicio() {
           <div className="stack" style={{ flex: '1 1 480px', minWidth: 0 }}>
             <p className="eyebrow">Portal documental</p>
             <h2 className="titulo-seccion">Toda su documentación, al día y en un solo sitio</h2>
-            <p className="lead">Certificados ISO, inspecciones OCA, licencias y proyectos con su fecha de caducidad a la vista. Le avisamos antes de que venzan y puede enviarnos las renovaciones desde el portal.</p>
+            <p className="lead">Las instalaciones de alta tensión, baja tensión y el resto de tipos, con su fecha de caducidad a la vista. Le avisamos antes de que venzan y puede enviarnos las renovaciones desde el portal.</p>
             <ul className="lista-check">
               <li><Icon name="check" /> Avisos por correo antes de cada caducidad</li>
               <li><Icon name="check" /> Histórico completo: nada se borra al renovar</li>
@@ -115,10 +120,10 @@ export default async function Inicio() {
             <div><Link href="/portal" className="btn btn--primary">Entrar al portal</Link></div>
           </div>
           <div aria-hidden="true" className="card stack" style={{ flex: '1 1 360px', minWidth: 0, gap: 12, boxShadow: 'var(--shadow-card)' }}>
-            <div className="row" style={{ justifyContent: 'space-between' }}><strong>Certificado ISO 9001</strong><StatusBadge estado="verde" /></div>
-            <div className="row" style={{ justifyContent: 'space-between' }}><strong>OCA baja tensión · Nave 2</strong><StatusBadge estado="naranja" /></div>
-            <div className="row" style={{ justifyContent: 'space-between' }}><strong>Licencia ambiental</strong><StatusBadge estado="amarillo" /></div>
-            <div className="row" style={{ justifyContent: 'space-between' }}><strong>Seguimiento de avifauna</strong><StatusBadge estado="rojo" /></div>
+            <div className="row" style={{ justifyContent: 'space-between' }}><strong>Alta tensión · Centro 1</strong><StatusBadge estado="verde" /></div>
+            <div className="row" style={{ justifyContent: 'space-between' }}><strong>Baja tensión · Nave 2</strong><StatusBadge estado="amarillo" /></div>
+            <div className="row" style={{ justifyContent: 'space-between' }}><strong>Baja tensión · Oficina</strong><StatusBadge estado="naranja" /></div>
+            <div className="row" style={{ justifyContent: 'space-between' }}><strong>Alta tensión · Nave 4</strong><StatusBadge estado="rojo" /></div>
           </div>
         </div>
       </section>

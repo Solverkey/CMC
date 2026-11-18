@@ -22,6 +22,7 @@ import { Envios } from './collections/Envios'
 import { Media } from './collections/Media'
 import { OAuthClientes, OAuthCodigos } from './collections/OAuth'
 import { Users } from './collections/Users'
+import { Videos } from './collections/Videos'
 import { Consultas, Servicios, Trabajos } from './collections/Web'
 import { endpoints } from './endpoints'
 import { Configuracion } from './globals/Configuracion'
@@ -81,7 +82,7 @@ export default buildConfig({
     dateFormat: 'dd/MM/yyyy',
   },
   i18n: { supportedLanguages: { es }, fallbackLanguage: 'es' },
-  collections: [Empresas, Categorias, Documentos, Archivos, Envios, Hilos, Mensajes, Adjuntos, Users, Catalogo, Correos, Actividad, Media, Originales, OAuthClientes, OAuthCodigos, Servicios, Trabajos, Consultas],
+  collections: [Empresas, Categorias, Documentos, Archivos, Envios, Hilos, Mensajes, Adjuntos, Users, Catalogo, Correos, Actividad, Media, Videos, Originales, OAuthClientes, OAuthCodigos, Servicios, Trabajos, Consultas],
   globals: [Configuracion, Web],
   endpoints,
   editor: lexicalEditor(),
@@ -112,6 +113,7 @@ export default buildConfig({
       collections: {
         ...Object.fromEntries(PROTEGIDAS.map((slug) => [slug, { prefix: slug, signedDownloads: { shouldUseSignedURL: () => true, expiresIn: 300 } }])),
         media: { prefix: 'media' },
+        videos: { prefix: 'portada' },
       },
     }),
     mcpPlugin({

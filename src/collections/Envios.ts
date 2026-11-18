@@ -171,7 +171,7 @@ export const Envios: CollectionConfig = {
         { name: 'documentoDestino', label: 'Publicar en el documento', type: 'relationship', relationTo: 'documentos', filterOptions: ({ data }) => (data?.empresa ? { empresa: { equals: idDe(data.empresa) } } : true) },
         { name: 'relacionFinal', label: 'Tipo de relación', type: 'text', admin: { components: campoCatalogo('relacion'), description: 'Vacío = el propuesto (o «Original» en un documento nuevo).' } },
         { name: 'categoriaDestino', label: 'Categoría (documento nuevo)', type: 'relationship', relationTo: 'categorias', filterOptions: ({ data }) => (data?.empresa ? { empresa: { equals: idDe(data.empresa) } } : true), admin: { condition: (d) => !d?.documentoDestino } },
-        { name: 'tituloFinal', label: 'Nombre definitivo', type: 'text', admin: { components: campoCatalogo('documento') } },
+        { name: 'tituloFinal', label: 'Nombre definitivo', type: 'text', admin: { components: campoCatalogo('documento', 'categoriaDestino') } },
         {
           type: 'row',
           fields: [

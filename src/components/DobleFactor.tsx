@@ -1,6 +1,7 @@
 'use client'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { CampoPassword } from '@/components/CampoPassword'
 
 const post = async (ruta: string, body?: unknown) => {
   const res = await fetch(`/api/users/2fa/${ruta}`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}) })
@@ -69,25 +70,28 @@ export function DobleFactor({ activo, obligatorio }: { activo: boolean; obligato
 /** Cambio de contraseña de la propia cuenta. */
 export function CambiarPassword({ id }: { id: string }) {
   const [msg, setMsg] = useState<{ ok?: string; error?: string } | null>(null)
+  const [password, setPassword] = useState('')
+  const [repetir, setRepetir] = useState('')
   return (
     <form
       className="stack"
       onSubmit={async (e) => {
         e.preventDefault()
-        const f = new FormData(e.currentTarget)
-        if (f.get('password') !== f.get('repetir')) return setMsg({ error: 'Las contraseñas no coinciden.' })
-        const res = await fetch(`/api/users/${id}`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: f.get('password') }) })
+        if (password !== repetir) return setMsg({ error: 'Las contraseñas no coinciden.' })
+        const res = await fetch(`/api/users/${id}`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) })
         const json = await res.json().catch(() => null)
         setMsg(res.ok ? { ok: 'Contraseña cambiada.' } : { error: json?.errors?.[0]?.message ?? 'No se ha podido cambiar.' })
-        if (res.ok) e.currentTarget.reset()
+        if (res.ok) {
+          setPassword('')
+          setRepetir('')
+        }
       }}
     >
-      <div className="row" style={{ alignItems: 'flex-end' }}>
-        <div className="field"><label htmlFor="password">Nueva contraseña</label><input id="password" name="password" type="password" autoComplete="new-password" minLength={10} required /></div>
-        <div className="field"><label htmlFor="repetir">Repítala</label><input id="repetir" name="repetir" type="password" autoComplete="new-password" minLength={10} required /></div>
-        <button className="btn btn--secondary">Cambiar</button>
+      <div className="row" style={{ alignItems: 'flex-start' }}>
+        <CampoPassword id="password" name="password" label="Nueva contraseña" autoComplete="new-password" reglas value={password} onChange={setPassword} crece />
+        <CampoPassword id="repetir" name="repetir" label="Repítala" autoComplete="new-password" value={repetir} onChange={setRepetir} coincide={password} crece />
+        <button className="btn btn--secondary" style={{ marginTop: 26 }}>Cambiar</button>
       </div>
-      <span className="hint">Al menos 10 caracteres, con letras y números.</span>
       {msg?.error && <p role="alert" className="alert alert--error">{msg.error}</p>}
       {msg?.ok && <p role="status" className="alert alert--ok">{msg.ok}</p>}
     </form>

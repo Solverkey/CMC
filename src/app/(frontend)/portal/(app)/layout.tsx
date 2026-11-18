@@ -26,6 +26,7 @@ export default async function PortalLayout({ children }: { children: React.React
     { href: '/portal/enviar', texto: cmc ? 'Bandeja de envíos' : 'Enviar a CMC', icono: 'upload', aviso: pendientes?.totalDocs },
     { href: '/portal/mensajes', texto: 'Comunicación con CMC', icono: 'chat', aviso: sinLeer.totalDocs },
     { href: '/portal/avisos', texto: 'Avisos', icono: 'bell' },
+    { href: '/portal/facturacion', texto: 'Facturación', icono: 'list' },
     ...(esAdmin ? ([{ href: '/portal/usuarios', texto: 'Usuarios', icono: 'users' }, { href: '/portal/actividad', texto: 'Registro de actividad', icono: 'list' }] as Enlace[]) : []),
     ...(cmc ? ([{ href: '/portal/almacenamiento', texto: 'Almacenamiento', icono: 'database' }, { href: '/admin', texto: 'Administración', icono: 'settings', externo: true }] as Enlace[]) : []),
     { href: '/portal/asistentes', texto: 'Asistentes de IA', icono: 'key' },
@@ -37,8 +38,8 @@ export default async function PortalLayout({ children }: { children: React.React
       <aside className="portal__side">
         <Link href="/portal" className="wordmark" style={{ paddingInline: 8 }}>
           {/* eslint-disable-next-line @next/next/no-img-element -- el logotipo puede venir de S3 */}
-          {logo?.url ? <img src={logo.url} alt={primera?.razonSocial ?? ''} style={{ maxHeight: 40, maxWidth: 160 }} /> : <b style={{ fontSize: 26 }}>CMC</b>}
-          <span>Portal documental</span>
+          {logo?.url ? <img src={logo.url} alt={primera?.razonSocial ?? ''} style={{ maxHeight: 40, maxWidth: 160 }} /> : <img src="/marca/cmc.png" alt="" width={408} height={112} />}
+          {logo?.url && <span>Portal documental</span>}
         </Link>
         <NavPortal enlaces={enlaces} obligar2FA={obligar2FA} />
         <div style={{ marginTop: 'auto', paddingTop: 12, borderTop: '1px solid var(--line)' }} className="stack">

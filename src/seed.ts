@@ -63,16 +63,15 @@ if (process.env.SEED_SIN_DEMO !== '1') {
   const cat = async (nombre: string, antelacionMeses?: number, gestion?: 'gestionado') =>
     payload.create({ collection: 'categorias', data: { nombre, empresa: empresa.id, antelacionMeses, gestion }, context })
 
-  const iso = await cat('Certificados ISO')
-  const oca = await cat('Inspecciones OCA', 3, 'gestionado')
-  const lic = await cat('Licencias')
+  const alta = await cat('Alta tensión')
+  const baja = await cat('Baja tensión', 3, 'gestionado')
 
   const docs = [
-    { titulo: 'Certificado ISO 9001', categoria: iso.id, referencia: 'ES-QA-0001', fechaCaducidad: enDias(500) },
-    { titulo: 'Certificado ISO 14001', categoria: iso.id, referencia: 'ES-EM-0001', fechaCaducidad: enDias(80) },
-    { titulo: 'Inspección OCA baja tensión — Nave 2', categoria: oca.id, referencia: 'OCA-0001', fechaCaducidad: enDias(29) },
-    { titulo: 'Licencia ambiental de actividad', categoria: lic.id, organismo: 'Ayuntamiento', fechaCaducidad: enDias(-46) },
-    { titulo: 'Plan de autoprotección', categoria: lic.id, fechaCaducidad: enDias(400), estadoManual: 'amarillo' as const, motivoEstado: 'Pendiente de subsanar el plano de evacuación.' },
+    { titulo: 'Inspección de alta tensión', categoria: alta.id, referencia: 'AT-0001', fechaCaducidad: enDias(500) },
+    { titulo: 'Centro de transformación', categoria: alta.id, referencia: 'AT-0002', fechaCaducidad: enDias(80) },
+    { titulo: 'Inspección de baja tensión — Nave 2', categoria: baja.id, referencia: 'BT-0001', fechaCaducidad: enDias(29) },
+    { titulo: 'Cuadro eléctrico de baja tensión', categoria: baja.id, organismo: 'Organismo de control', fechaCaducidad: enDias(-46) },
+    { titulo: 'Instalación de baja tensión — Oficina', categoria: baja.id, fechaCaducidad: enDias(400), estadoManual: 'naranja' as const, motivoEstado: 'Pendiente de subsanar el plano de evacuación.' },
   ]
   for (const d of docs) await payload.create({ collection: 'documentos', data: { ...d, empresa: empresa.id }, context })
 }

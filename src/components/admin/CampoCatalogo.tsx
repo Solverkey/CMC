@@ -1,15 +1,22 @@
 'use client'
 
-import { FieldLabel, useField } from '@payloadcms/ui'
+import { FieldLabel, useField, useFormFields } from '@payloadcms/ui'
 import type { TextFieldClientComponent } from 'payload'
 import { useEffect, useId, useState } from 'react'
+import { nombreDeOpcion, opcionNueva } from '@/lib/catalogoCampo'
 
-type Sugerencias = { opciones: string[]; exacta: string | null; similares: string[] }
+type Sugerencias = { opciones: { id: number | string; nombre: string }[]; exacta: string | null; similares: string[] }
 
 /** Campo de texto con autocompletado del catálogo y aviso de nombres parecidos (RF-28). */
 export const CampoCatalogo: TextFieldClientComponent = (props) => {
   const { path, field } = props
-  const tipo = (props as unknown as { tipo: string }).tipo
+  const extra = props as unknown as { tipo: string; categoria?: string }
+  const tipo = extra.tipo
+  const categoria = useFormFields(([fields]) => {
+    const valor = extra.categoria ? fields[extra.categoria]?.value : null
+    if (valor && typeof valor === 'object' && 'id' in valor) return String((valor as { id: unknown }).id)
+    return valor == null || valor === '' ? '' : String(valor)
+  })
   const { value, setValue, showError, errorMessage } = useField<string>({ path })
   const [s, setS] = useState<Sugerencias>({ opciones: [], exacta: null, similares: [] })
   const lista = useId()
@@ -17,7 +24,8 @@ export const CampoCatalogo: TextFieldClientComponent = (props) => {
   useEffect(() => {
     const ctrl = new AbortController()
     const t = setTimeout(() => {
-      fetch(`/api/catalogo/sugerencias?tipo=${tipo}&q=${encodeURIComponent(value ?? '')}`, { credentials: 'include', signal: ctrl.signal })
+      const q = new URLSearchParams({ tipo, q: value ?? '', ...(categoria ? { categoria } : {}) })
+      fetch(`/api/catalogo/sugerencias?${q}`, { credentials: 'include', signal: ctrl.signal })
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => d && setS(d))
         .catch(() => null)
@@ -26,17 +34,18 @@ export const CampoCatalogo: TextFieldClientComponent = (props) => {
       clearTimeout(t)
       ctrl.abort()
     }
-  }, [tipo, value])
+  }, [tipo, value, categoria])
 
   const nuevo = Boolean(value?.trim()) && !s.exacta
   return (
     <div className="field-type text" style={{ marginBottom: 'var(--base)' }}>
       <FieldLabel label={field.label} required={field.required} path={path} />
-      <input className={showError ? 'error' : undefined} list={lista} value={value ?? ''} onChange={(e) => setValue(e.target.value)} style={{ width: '100%' }} />
+      <input className={showError ? 'error' : undefined} list={lista} value={value ?? ''} onChange={(e) => setValue(nombreDeOpcion(e.target.value))} style={{ width: '100%' }} />
       <datalist id={lista}>
         {s.opciones.map((o) => (
-          <option key={o} value={o} />
+          <option key={o.id} value={o.nombre} />
         ))}
+        {nuevo && <option value={opcionNueva(value ?? '')} />}
       </datalist>
       {s.exacta && s.exacta !== value && (
         <p style={{ margin: '4px 0 0' }}>

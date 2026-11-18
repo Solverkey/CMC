@@ -19,7 +19,7 @@ export async function centroAvisos(req: PayloadRequest, empresaId: string | numb
   const [docs, enviados] = await Promise.all([
     req.payload.find({
       collection: 'documentos',
-      where: { and: [{ empresa: { equals: empresa.id } }, { estado: { not_equals: 'negro' } }, { fechaCaducidad: { exists: true } }, { fechaAviso: { less_than_equal: limite.toISOString() } }] },
+      where: { and: [{ empresa: { equals: empresa.id } }, { estado: { not_equals: 'negro' } }, { estado: { not_equals: 'azul' } }, { fechaCaducidad: { exists: true } }, { fechaAviso: { less_than_equal: limite.toISOString() } }] },
       depth: 1,
       limit: 1000,
       user: req.user,

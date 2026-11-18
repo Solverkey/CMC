@@ -88,7 +88,7 @@ export const Documentos: CollectionConfig = {
     ],
   },
   fields: [
-    { name: 'titulo', label: 'Título', type: 'text', required: true, admin: { components: campoCatalogo('documento') } },
+    { name: 'titulo', label: 'Título', type: 'text', required: true, admin: { components: campoCatalogo('documento', 'categoria') } },
     {
       type: 'row',
       fields: [
@@ -133,10 +133,11 @@ export const Documentos: CollectionConfig = {
       admin: { readOnly: true, position: 'sidebar', description: 'Se recalcula al guardar y cada noche.' },
       options: [
         { label: 'Verde · Vigente', value: 'verde' },
-        { label: 'Amarillo · Condicionada', value: 'amarillo' },
-        { label: 'Naranja · Caducidad próxima', value: 'naranja' },
+        { label: 'Amarillo · Caducidad próxima', value: 'amarillo' },
+        { label: 'Naranja · Condicionada', value: 'naranja' },
         { label: 'Rojo · Caducada', value: 'rojo' },
-        { label: 'Negro · No aplica', value: 'negro' },
+        { label: 'Azul · Pasado o archivado', value: 'azul' },
+        { label: 'Negro · No legalizado', value: 'negro' },
       ],
     },
     {
@@ -145,9 +146,10 @@ export const Documentos: CollectionConfig = {
       type: 'select',
       admin: { position: 'sidebar' },
       options: [
-        { label: 'Amarillo · Condicionada', value: 'amarillo' },
+        { label: 'Naranja · Condicionada', value: 'naranja' },
         { label: 'Rojo · Revocada o no válida', value: 'rojo' },
-        { label: 'Negro · Ya no es necesario', value: 'negro' },
+        { label: 'Azul · Pasado o archivado', value: 'azul' },
+        { label: 'Negro · No legalizado', value: 'negro' },
       ],
     },
     {
@@ -157,7 +159,7 @@ export const Documentos: CollectionConfig = {
       admin: { position: 'sidebar', condition: (data) => Boolean(data?.estadoManual) },
       validate: (val: unknown, { siblingData }: { siblingData: { estadoManual?: string } }) => (siblingData?.estadoManual && !val ? 'Indique el motivo.' : true),
     },
-    { name: 'limiteSubsanacion', label: 'Fecha límite de subsanación', type: 'date', admin: { position: 'sidebar', condition: (d) => d?.estadoManual === 'amarillo' } },
+    { name: 'limiteSubsanacion', label: 'Fecha límite de subsanación', type: 'date', admin: { position: 'sidebar', condition: (d) => d?.estadoManual === 'naranja' } },
     { ...gestionField, admin: { ...gestionField.admin, position: 'sidebar' } },
     { name: 'tecnico', label: 'Técnico de CMC responsable', type: 'relationship', relationTo: 'users', filterOptions: { rol: { equals: 'superadmin' } }, admin: { position: 'sidebar', description: 'Vacío: el responsable de la categoría o de la empresa.' } },
     { name: 'archivoVigente', type: 'relationship', relationTo: 'archivos', admin: { readOnly: true } },

@@ -61,7 +61,7 @@ const resumenDoc = (d: Documento) => {
     caducidad: d.fechaCaducidad ? fmt(d.fechaCaducidad) : 'Indefinido',
     aviso: fmt(d.fechaAviso),
     estado: ESTADOS[d.estado as Estado]?.label,
-    condicionado: d.estadoManual === 'amarillo' && d.estado !== 'amarillo',
+    condicionado: d.estadoManual === 'naranja' && d.estado !== 'naranja',
     gestion: resolverGestion(empresa?.gestion, cat?.gestion, d.gestion) === 'gestionado' ? 'Gestionado por CMC' : 'No gestionado',
   }
 }
@@ -74,8 +74,8 @@ const fichero = {
   mimeType: z.string().optional(),
 }
 
-async function comprobarNombre(req: PayloadRequest, tipo: TipoCatalogo, nombre: string, aceptar?: boolean) {
-  const s = await sugerir(req, tipo, nombre)
+async function comprobarNombre(req: PayloadRequest, tipo: TipoCatalogo, nombre: string, aceptar?: boolean, categoria?: string | number) {
+  const s = await sugerir(req, tipo, nombre, categoria == null ? undefined : String(categoria))
   if (s.exacta || aceptar || !s.similares.length) return null
   return texto(`«${nombre}» no existe en el catálogo, pero hay nombres muy parecidos: ${s.similares.map((n) => `«${n}»`).join(', ')}. Use uno de ellos o repita con aceptarNombreNuevo=true para añadir el nuevo.`)
 }
@@ -100,31 +100,31 @@ export const herramientas: Herramienta[] = [
     const { docs } = await req.payload.find({ collection: 'empresas', where: { activa: { equals: true } }, limit: 1000, depth: 0, sort: 'razonSocial', ...como(req) })
     const conteo = await conteoPorEmpresa(req.payload, esSuperAdmin(req.user) ? null : empresasDe(req.user))
     return docs.map((e) => {
-      const c = conteo[String(e.id)] ?? { verde: 0, amarillo: 0, naranja: 0, rojo: 0, negro: 0 }
+      const c = conteo[String(e.id)] ?? { verde: 0, amarillo: 0, naranja: 0, rojo: 0, azul: 0, negro: 0 }
       const estados = (Object.entries(c) as [Estado, number][]).filter(([, n]) => n > 0).map(([k]) => k)
-      return { id: e.id, razonSocial: e.razonSocial, cif: e.cif, peorEstado: ESTADOS[peorEstado(estados)].label, vigentes: c.verde, condicionados: c.amarillo, caducidadProxima: c.naranja, caducados: c.rojo }
+      return { id: e.id, razonSocial: e.razonSocial, cif: e.cif, peorEstado: ESTADOS[peorEstado(estados)].label, vigentes: c.verde, caducidadProxima: c.amarillo, condicionados: c.naranja, caducados: c.rojo, archivados: c.azul, noLegalizados: c.negro }
     })
   }),
   h(
     'buscar_documentos',
-    'Busca documentos por texto y filtros (empresa, categoría, estado, rango de fechas de caducidad). Estados: verde, amarillo, naranja, rojo (negro solo CMC).',
+    'Busca documentos por texto y filtros (empresa, categoría, estado, rango de fechas de caducidad). Estados: verde, amarillo (caducidad próxima), naranja (condicionada), rojo, azul (archivado), negro (no legalizado).',
     {
       texto: z.string().optional(),
       empresa: id.optional(),
       categoria: id.optional(),
-      estados: z.array(z.enum(['verde', 'amarillo', 'naranja', 'rojo', 'negro'])).optional(),
+      estados: z.array(z.enum(['verde', 'amarillo', 'naranja', 'rojo', 'azul', 'negro'])).optional(),
       caducaDesde: z.string().optional().describe('AAAA-MM-DD'),
       caducaHasta: z.string().optional().describe('AAAA-MM-DD'),
       limite: z.number().optional(),
     },
     async (a, req) => {
-      const r = await buscarDocumentos(req, { q: a.texto, empresa: a.empresa, categoria: a.categoria, estados: a.estados, desde: a.caducaDesde, hasta: a.caducaHasta, limite: a.limite ?? 50, incluirNegros: a.estados?.includes('negro') })
+      const r = await buscarDocumentos(req, { q: a.texto, empresa: a.empresa, categoria: a.categoria, estados: a.estados, desde: a.caducaDesde, hasta: a.caducaHasta, limite: a.limite ?? 50 })
       return { total: r.totalDocs, documentos: (r.docs as Documento[]).map(resumenDoc) }
     },
   ),
   h('proximos_vencimientos', 'Documentos que caducan en los próximos N días (30, 60, 90…), además de los caducados y condicionados. Sin empresa: todas las accesibles.', { dias: z.number().optional().describe('Por defecto 60'), empresa: id.optional() }, async (a, req) => {
     const limite = new Date(Date.now() + (a.dias ?? 60) * 86_400_000).toISOString()
-    const where: Where = { and: [{ estado: { not_equals: 'negro' } }, { or: [{ estado: { in: ['rojo', 'amarillo'] } }, { fechaCaducidad: { less_than_equal: limite } }] }, ...(a.empresa ? [{ empresa: { equals: a.empresa } }] : [])] }
+    const where: Where = { and: [{ estado: { not_equals: 'negro' } }, { estado: { not_equals: 'azul' } }, { or: [{ estado: { in: ['rojo', 'amarillo', 'naranja'] } }, { fechaCaducidad: { less_than_equal: limite } }] }, ...(a.empresa ? [{ empresa: { equals: a.empresa } }] : [])] }
     const { docs } = await req.payload.find({ collection: 'documentos', where, sort: 'fechaCaducidad', limit: 500, depth: 1, ...como(req) })
     return (docs as Documento[]).map(resumenDoc)
   }),
@@ -186,7 +186,7 @@ export const herramientas: Herramienta[] = [
     const { docs } = await req.payload.find({ collection: 'actividad', where, sort: '-createdAt', limit: Math.min(a.limite ?? 50, 500), depth: 0, ...como(req) })
     return docs.map((x) => ({ fecha: new Date(x.createdAt).toLocaleString('es-ES'), accion: x.accion, descripcion: x.descripcion, usuario: x.email, origen: x.origen }))
   }),
-  h('buscar_nombre_catalogo', 'Busca en los catálogos de nombres (categoria, documento, relacion) antes de crear uno nuevo, sin distinguir mayúsculas ni acentos.', { tipo: z.enum(['categoria', 'documento', 'relacion']), texto: z.string().optional() }, async (a, req) => sugerir(req, a.tipo, a.texto ?? '')),
+  h('buscar_nombre_catalogo', 'Busca en los catálogos de nombres (categoria, documento, relacion) antes de crear uno nuevo, sin distinguir mayúsculas ni acentos. Con categoría, prioriza los nombres de documento ya usados en ella.', { tipo: z.enum(['categoria', 'documento', 'relacion']), texto: z.string().optional(), categoria: id.optional() }, async (a, req) => sugerir(req, a.tipo, a.texto ?? '', a.categoria == null ? undefined : String(a.categoria))),
   h('almacenamiento', 'Almacenamiento consumido, total y por empresa (solo CMC).', {}, async (_a, req) => {
     soloCMC(req)
     const u = await almacenamiento(req.payload)
@@ -270,7 +270,7 @@ export const herramientas: Herramienta[] = [
     { empresa: id, categoria: id, titulo: z.string(), referencia: z.string().optional(), organismo: z.string().optional(), fechaEmision: z.string().optional(), fechaCaducidad: z.string().optional(), fechaAviso: z.string().optional(), gestion: z.enum(['gestionado', 'no_gestionado']).optional(), aceptarNombreNuevo: z.boolean().optional(), ...fichero },
     async (a, req) => {
       soloCMC(req)
-      const aviso = await comprobarNombre(req, 'documento', a.titulo, a.aceptarNombreNuevo)
+      const aviso = await comprobarNombre(req, 'documento', a.titulo, a.aceptarNombreNuevo, a.categoria)
       if (aviso) return aviso
       const d = await req.payload.create({ collection: 'documentos', data: { empresa: Number(a.empresa), categoria: Number(a.categoria), titulo: a.titulo, referencia: a.referencia, organismo: a.organismo, fechaEmision: a.fechaEmision, fechaCaducidad: a.fechaCaducidad, fechaAviso: a.fechaAviso, gestion: a.gestion }, ...como(req) })
       const file = ficheroDe(a)
@@ -330,8 +330,8 @@ export const herramientas: Herramienta[] = [
   }),
   h(
     'cambiar_estado_manual',
-    'CMC: fija un estado manual (amarillo = condicionada, rojo = revocada, negro = ya no aplica) con su motivo, o lo quita (ninguno).',
-    { documento: id, estado: z.enum(['amarillo', 'rojo', 'negro', 'ninguno']), motivo: z.string().optional(), limiteSubsanacion: z.string().optional(), confirmar },
+    'CMC: fija un estado manual (naranja = condicionada, rojo = revocada, azul = pasado o archivado, negro = no legalizado) con su motivo, o lo quita (ninguno).',
+    { documento: id, estado: z.enum(['naranja', 'rojo', 'azul', 'negro', 'ninguno']), motivo: z.string().optional(), limiteSubsanacion: z.string().optional(), confirmar },
     async (a, req) => {
       soloCMC(req)
       if (a.estado !== 'ninguno' && !a.motivo) throw new APIError('Indique el motivo.', 400, null, true)

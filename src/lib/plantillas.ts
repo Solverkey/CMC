@@ -76,7 +76,7 @@ export const PLANTILLAS = {
   },
   resumen_semanal: {
     etiqueta: 'Resumen semanal para CMC',
-    asunto: 'Resumen semanal: {{total}} documentos en naranja o rojo',
+    asunto: 'Resumen semanal: {{total}} documentos en amarillo o rojo',
     cuerpo: 'Documentos con caducidad próxima o caducados en todas las empresas:\n\n{{resumen}}',
     boton: 'Abrir panel',
   },

@@ -14,7 +14,7 @@ export const areaDe = (v?: string | null) => AREAS.find((a) => a.value === v) ??
 export type Sede = { ciudad: string; direccion: string; codigoPostal: string; telefono: string }
 
 export type DatosWeb = {
-  portada: { antetitulo: string; titulo: string; subtitulo: string; imagen?: Media }
+  portada: { antetitulo: string; titulo: string; subtitulo: string; imagen?: Media; videos: string[] }
   presentacion: string
   profesionales: { titulo: string; texto: string }[]
   sedes: Sede[]
@@ -30,6 +30,7 @@ export const WEB_POR_DEFECTO: DatosWeb = {
     antetitulo: 'Logroño · Burgos · Desde 2000',
     titulo: 'Calidad y medio ambiente, con rigor técnico',
     subtitulo: 'Implantamos sistemas ISO 9001 e ISO 14001, realizamos estudios de impacto ambiental y de fauna y flora, y mantenemos al día la documentación regulatoria de su empresa.',
+    videos: [],
   },
   presentacion:
     'CMC centra su actividad en dos áreas: la calidad y el medio ambiente.\n\nComenzamos en el año 2000 con la implantación de sistemas de gestión de la calidad según la norma ISO 9001 y de sistemas de gestión medioambiental según la norma ISO 14001. Desde entonces hemos incorporado estudios de impacto ambiental, seguimientos ambientales y la evaluación de la afección sobre la flora y la fauna de parques eólicos, líneas eléctricas y centrales fotovoltaicas, entre otras instalaciones.\n\nTambién elaboramos informes de sostenibilidad ambiental, tramitamos licencias ambientales, impartimos formación y gestionamos ayudas y subvenciones: cubrimos las necesidades reales de nuestros clientes.',
@@ -63,6 +64,7 @@ export async function leerWeb(payload: Payload): Promise<DatosWeb> {
       titulo: texto(p.titulo, d.portada.titulo),
       subtitulo: texto(p.subtitulo, d.portada.subtitulo),
       imagen: p.imagen && typeof p.imagen === 'object' && p.imagen.url ? (p.imagen as Media) : undefined,
+      videos: (Array.isArray(p.videos) ? p.videos : []).map((v: { url?: string } | string) => (typeof v === 'object' && v?.url ? v.url : '')).filter(Boolean),
     },
     presentacion: texto(g.presentacion, d.presentacion),
     profesionales: g.profesionales?.length ? g.profesionales : d.profesionales,

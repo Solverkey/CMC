@@ -81,6 +81,7 @@ export interface Config {
     correos: Correo;
     actividad: Actividad;
     media: Media;
+    videos: Video;
     originales: Originale;
     'oauth-clientes': OauthCliente;
     'oauth-codigos': OauthCodigo;
@@ -116,6 +117,7 @@ export interface Config {
     correos: CorreosSelect<false> | CorreosSelect<true>;
     actividad: ActividadSelect<false> | ActividadSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
+    videos: VideosSelect<false> | VideosSelect<true>;
     originales: OriginalesSelect<false> | OriginalesSelect<true>;
     'oauth-clientes': OauthClientesSelect<false> | OauthClientesSelect<true>;
     'oauth-codigos': OauthCodigosSelect<false> | OauthCodigosSelect<true>;
@@ -310,7 +312,7 @@ export interface User {
 export interface Categoria {
   id: number;
   /**
-   * ISO, OCA, Licencias, Proyectos… Escriba para buscar en el catálogo o añadir un nombre nuevo.
+   * Tipo de instalación: alta tensión, baja tensión… Escriba para buscar en el catálogo o añadir un nombre nuevo.
    */
   nombre: string;
   empresa: number | Empresa;
@@ -353,8 +355,8 @@ export interface Documento {
   /**
    * Se recalcula al guardar y cada noche.
    */
-  estado?: ('verde' | 'amarillo' | 'naranja' | 'rojo' | 'negro') | null;
-  estadoManual?: ('amarillo' | 'rojo' | 'negro') | null;
+  estado?: ('verde' | 'amarillo' | 'naranja' | 'rojo' | 'azul' | 'negro') | null;
+  estadoManual?: ('naranja' | 'rojo' | 'azul' | 'negro') | null;
   motivoEstado?: string | null;
   limiteSubsanacion?: string | null;
   /**
@@ -405,7 +407,7 @@ export interface Archivo {
   nuevoAviso?: string | null;
   comentario?: string | null;
   /**
-   * Sustituido: estado Negro (No aplica).
+   * Sustituido: queda en el histórico del documento.
    */
   historico?: boolean | null;
   tamanoOriginal?: number | null;
@@ -628,6 +630,27 @@ export interface Actividad {
   createdAt: string;
 }
 /**
+ * Mp4 o WebM. En la portada se turnan de 5 en 5 segundos.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "videos".
+ */
+export interface Video {
+  id: number;
+  alt?: string | null;
+  updatedAt: string;
+  createdAt: string;
+  url?: string | null;
+  thumbnailURL?: string | null;
+  filename?: string | null;
+  mimeType?: string | null;
+  filesize?: number | null;
+  width?: number | null;
+  height?: number | null;
+  focalX?: number | null;
+  focalY?: number | null;
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "originales".
  */
@@ -789,7 +812,7 @@ export interface PayloadMcpApiKey {
      */
     misEmpresas?: boolean | null;
     /**
-     * Busca documentos por texto y filtros (empresa, categoría, estado, rango de fechas de caducidad). Estados: verde, amarillo, naranja, rojo (negro solo CMC).
+     * Busca documentos por texto y filtros (empresa, categoría, estado, rango de fechas de caducidad). Estados: verde, amarillo (caducidad próxima), naranja (condicionada), rojo, azul (archivado), negro (no legalizado).
      */
     buscarDocumentos?: boolean | null;
     /**
@@ -837,7 +860,7 @@ export interface PayloadMcpApiKey {
      */
     registroActividad?: boolean | null;
     /**
-     * Busca en los catálogos de nombres (categoria, documento, relacion) antes de crear uno nuevo, sin distinguir mayúsculas ni acentos.
+     * Busca en los catálogos de nombres (categoria, documento, relacion) antes de crear uno nuevo, sin distinguir mayúsculas ni acentos. Con categoría, prioriza los nombres de documento ya usados en ella.
      */
     buscarNombreCatalogo?: boolean | null;
     /**
@@ -897,7 +920,7 @@ export interface PayloadMcpApiKey {
      */
     rechazarEnvio?: boolean | null;
     /**
-     * CMC: fija un estado manual (amarillo = condicionada, rojo = revocada, negro = ya no aplica) con su motivo, o lo quita (ninguno).
+     * CMC: fija un estado manual (naranja = condicionada, rojo = revocada, azul = pasado o archivado, negro = no legalizado) con su motivo, o lo quita (ninguno).
      */
     cambiarEstadoManual?: boolean | null;
     /**
@@ -1103,6 +1126,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'media';
         value: number | Media;
+      } | null)
+    | ({
+        relationTo: 'videos';
+        value: number | Video;
       } | null)
     | ({
         relationTo: 'originales';
@@ -1469,6 +1496,24 @@ export interface ActividadSelect<T extends boolean = true> {
  * via the `definition` "media_select".
  */
 export interface MediaSelect<T extends boolean = true> {
+  alt?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  url?: T;
+  thumbnailURL?: T;
+  filename?: T;
+  mimeType?: T;
+  filesize?: T;
+  width?: T;
+  height?: T;
+  focalX?: T;
+  focalY?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "videos_select".
+ */
+export interface VideosSelect<T extends boolean = true> {
   alt?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -1875,9 +1920,13 @@ export interface Web {
     titulo?: string | null;
     subtitulo?: string | null;
     /**
-     * Opcional. Fotografía de cabecera (horizontal).
+     * Opcional. Fotografía de cabecera (horizontal). Se usa si no hay vídeos.
      */
     imagen?: (number | null) | Media;
+    /**
+     * Mp4 o WebM, unos 15 segundos. Si hay más de uno, la portada enseña 5 segundos de cada clip y pasa al siguiente.
+     */
+    videos?: (number | Video)[] | null;
   };
   descripcion?: string | null;
   presentacion?: string | null;
@@ -2151,6 +2200,7 @@ export interface WebSelect<T extends boolean = true> {
         titulo?: T;
         subtitulo?: T;
         imagen?: T;
+        videos?: T;
       };
   descripcion?: T;
   presentacion?: T;

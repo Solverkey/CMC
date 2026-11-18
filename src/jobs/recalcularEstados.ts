@@ -83,7 +83,7 @@ export const recalcularEstados: TaskConfig<'recalcularEstados'> = {
     let cambiados = 0
     let avisos = 0
     for (;;) {
-      const res = await req.payload.find({ collection: 'documentos', limit: 200, page, depth: 1, overrideAccess: true, req, where: { estado: { not_equals: 'negro' } } })
+      const res = await req.payload.find({ collection: 'documentos', limit: 200, page, depth: 1, overrideAccess: true, req, where: { and: [{ estado: { not_equals: 'negro' } }, { estado: { not_equals: 'azul' } }] } })
       for (const d of res.docs) {
         const nuevo = calcularEstado(d)
         if (nuevo !== d.estado) {
@@ -107,14 +107,14 @@ export const recalcularEstados: TaskConfig<'recalcularEstados'> = {
   },
 }
 
-/** Cada lunes: resumen para CMC con los documentos naranja y rojo de todas las empresas. */
+/** Cada lunes: resumen para CMC con los documentos de caducidad próxima y caducados. */
 export const resumenSemanal: TaskConfig<'resumenSemanal'> = {
   slug: 'resumenSemanal',
   retries: 3,
   schedule: [{ cron: '0 7 * * 1', queue: 'nocturna' }],
   handler: async ({ req }) => {
     req.context.origen = 'sistema'
-    const { docs } = await req.payload.find({ collection: 'documentos', where: { estado: { in: ['naranja', 'rojo'] }, 'empresa.activa': { equals: true } }, sort: 'fechaCaducidad', limit: 2000, depth: 1, overrideAccess: true, req })
+    const { docs } = await req.payload.find({ collection: 'documentos', where: { estado: { in: ['amarillo', 'rojo'] }, 'empresa.activa': { equals: true } }, sort: 'fechaCaducidad', limit: 2000, depth: 1, overrideAccess: true, req })
     if (!docs.length) return { output: { total: 0 } }
     const lineas = docs.map((d) => `• ${(d.empresa as Empresa).razonSocial} — ${d.titulo}: ${d.estado === 'rojo' ? 'caducado' : 'caduca'} el ${fmt(d.fechaCaducidad)}`)
     const semana = new Date().toISOString().slice(0, 10)

@@ -35,7 +35,7 @@ export default async function ActividadPage({ searchParams }: { searchParams: Pr
         <p className="muted">Accesos, subidas, descargas, cambios de estado y correos. El registro no se puede modificar ni borrar.</p>
       </div>
 
-      <form className="card row" role="search" style={{ alignItems: 'flex-end' }}>
+      <form className="card filtros" role="search">
         {(cmc || empresas.length > 1) && (
           <div className="field">
             <label htmlFor="empresa">Empresa</label>

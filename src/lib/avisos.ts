@@ -24,7 +24,7 @@ export function hitoDeHoy(
   cfg: Secuencia,
   hoy: Date = new Date(),
 ): Hito | null {
-  if (!doc.fechaCaducidad || doc.estado === 'negro') return null
+  if (!doc.fechaCaducidad || doc.estado === 'negro' || doc.estado === 'azul') return null
   const h = dia(hoy)
   const cad = dia(doc.fechaCaducidad)
   const aviso = doc.fechaAviso ? dia(doc.fechaAviso) : cad

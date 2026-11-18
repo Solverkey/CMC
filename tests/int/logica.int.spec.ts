@@ -9,21 +9,23 @@ const hoy = new Date('2026-06-15T10:00:00')
 const enDias = (n: number) => new Date(hoy.getTime() + n * 86_400_000).toISOString()
 
 describe('semáforo (apartado 4)', () => {
-  it('calcula verde, naranja y rojo por fechas', () => {
+  it('calcula verde, amarillo y rojo por fechas', () => {
     expect(calcularEstado({ fechaCaducidad: enDias(200), fechaAviso: enDias(140) }, hoy)).toBe('verde')
-    expect(calcularEstado({ fechaCaducidad: enDias(30), fechaAviso: enDias(-30) }, hoy)).toBe('naranja')
+    expect(calcularEstado({ fechaCaducidad: enDias(30), fechaAviso: enDias(-30) }, hoy)).toBe('amarillo')
     expect(calcularEstado({ fechaCaducidad: enDias(-1), fechaAviso: enDias(-60) }, hoy)).toBe('rojo')
   })
   it('un documento indefinido sigue vigente', () => expect(calcularEstado({}, hoy)).toBe('verde'))
   it('los estados manuales mandan según la prioridad', () => {
     expect(calcularEstado({ fechaCaducidad: enDias(200), estadoManual: 'negro' }, hoy)).toBe('negro')
+    expect(calcularEstado({ fechaCaducidad: enDias(200), estadoManual: 'azul' }, hoy)).toBe('azul')
     expect(calcularEstado({ fechaCaducidad: enDias(200), estadoManual: 'rojo' }, hoy)).toBe('rojo')
-    expect(calcularEstado({ fechaCaducidad: enDias(200), estadoManual: 'amarillo' }, hoy)).toBe('amarillo')
-    expect(calcularEstado({ fechaCaducidad: enDias(-5), estadoManual: 'amarillo' }, hoy)).toBe('rojo')
+    expect(calcularEstado({ fechaCaducidad: enDias(200), estadoManual: 'naranja' }, hoy)).toBe('naranja')
+    expect(calcularEstado({ fechaCaducidad: enDias(-5), estadoManual: 'naranja' }, hoy)).toBe('rojo')
   })
-  it('el color agregado es el peor sin contar los negros', () => {
-    expect(peorEstado(['verde', 'naranja', 'amarillo'])).toBe('naranja')
-    expect(peorEstado(['verde', 'negro'])).toBe('verde')
+  it('el color agregado es el peor sin contar los archivados', () => {
+    expect(peorEstado(['verde', 'naranja', 'amarillo'])).toBe('amarillo')
+    expect(peorEstado(['verde', 'azul'])).toBe('verde')
+    expect(peorEstado(['verde', 'negro'])).toBe('negro')
     expect(peorEstado([])).toBe('verde')
   })
 })
@@ -53,7 +55,10 @@ describe('secuencia de avisos (apartado 6)', () => {
     const b = hitoDeHoy({ fechaCaducidad: enDias(365), fechaAviso: enDias(0) }, cfg, hoy)
     expect(a?.clave).not.toBe(b?.clave)
   })
-  it('no avisa de documentos que no aplican', () => expect(hitoDeHoy({ fechaCaducidad: enDias(-1), estado: 'negro' }, cfg, hoy)).toBeNull())
+  it('no avisa de archivados ni de no legalizados', () => {
+    expect(hitoDeHoy({ fechaCaducidad: enDias(-1), estado: 'negro' }, cfg, hoy)).toBeNull()
+    expect(hitoDeHoy({ fechaCaducidad: enDias(-1), estado: 'azul' }, cfg, hoy)).toBeNull()
+  })
 })
 
 describe('doble factor (TOTP)', () => {

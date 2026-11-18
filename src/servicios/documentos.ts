@@ -3,7 +3,7 @@ import JSZip from 'jszip'
 import type { PayloadRequest, Where } from 'payload'
 import { APIError } from 'payload'
 import type { Archivo, Categoria, Documento, Empresa } from '@/payload-types'
-import { esSuperAdmin, puedeVerEmpresa } from '../access'
+import { puedeVerEmpresa } from '../access'
 import { registrar } from '../lib/actividad'
 import { crearTokenFirmado, leerTokenFirmado } from '../lib/cifrado'
 import { urlServidor } from '../lib/configuracion'
@@ -22,7 +22,6 @@ export type Filtros = {
   estados?: Estado[]
   desde?: string
   hasta?: string
-  incluirNegros?: boolean
   limite?: number
   pagina?: number
   orden?: string
@@ -38,9 +37,6 @@ export async function buscarDocumentos(req: PayloadRequest, f: Filtros) {
   if (f.empresa) and.push({ empresa: { equals: f.empresa } })
   if (f.categoria) and.push({ categoria: { equals: f.categoria } })
   if (f.estados?.length) and.push({ estado: { in: f.estados } })
-  // Los documentos en negro solo aparecen en los listados de CMC y si lo pide con el filtro.
-  if (!(f.incluirNegros && esSuperAdmin(req.user)) && !f.estados?.includes('negro')) and.push({ estado: { not_equals: 'negro' } })
-  if (f.estados?.includes('negro') && !esSuperAdmin(req.user)) throw new APIError('Solo CMC puede listar documentos que no aplican.', 403, null, true)
   if (f.desde) and.push({ fechaCaducidad: { greater_than_equal: new Date(f.desde).toISOString() } })
   if (f.hasta) and.push({ fechaCaducidad: { less_than_equal: new Date(`${f.hasta}T23:59:59`).toISOString() } })
   return req.payload.find({
@@ -116,7 +112,7 @@ export async function zipDocumentos(req: PayloadRequest, ids: (string | number)[
 export async function inventario(req: PayloadRequest, empresaId: string | number, formato: 'xlsx' | 'pdf') {
   if (!puedeVerEmpresa(req.user, empresaId)) throw new APIError('No tiene acceso a esa empresa.', 403, null, true)
   const empresa = (await req.payload.findByID({ collection: 'empresas', id: empresaId, user: req.user, overrideAccess: false, depth: 0, req })) as Empresa
-  const { docs } = await req.payload.find({ collection: 'documentos', where: { and: [{ empresa: { equals: empresa.id } }, { estado: { not_equals: 'negro' } }] }, user: req.user, overrideAccess: false, depth: 1, limit: 10000, sort: 'fechaCaducidad', req })
+  const { docs } = await req.payload.find({ collection: 'documentos', where: { empresa: { equals: empresa.id } }, user: req.user, overrideAccess: false, depth: 1, limit: 10000, sort: 'fechaCaducidad', req })
   const filas = (docs as Documento[])
     .map((d) => {
       const cat = d.categoria as Categoria
@@ -130,7 +126,7 @@ export async function inventario(req: PayloadRequest, empresaId: string | number
         caducidad: d.fechaCaducidad ? fmt(d.fechaCaducidad) : 'Indefinido',
         aviso: fmt(d.fechaAviso),
         estado: ESTADOS[d.estado as Estado]?.label ?? '',
-        condicionado: d.estadoManual === 'amarillo' && d.estado !== 'amarillo' ? 'Sí' : '',
+        condicionado: d.estadoManual === 'naranja' && d.estado !== 'naranja' ? 'Sí' : '',
         gestion: resolverGestion(empresa.gestion, cat?.gestion, d.gestion) === 'gestionado' ? 'Gestionado por CMC' : 'No gestionado',
       }
     })
@@ -159,7 +155,7 @@ export async function inventario(req: PayloadRequest, empresaId: string | number
     ws.views = [{ state: 'frozen', ySplit: 1 }]
     ws.autoFilter = { from: 'A1', to: 'J1' }
     filas.forEach((f) => ws.addRow(f))
-    const colores: Record<string, string> = { Vigente: 'FFE1EFE4', Condicionada: 'FFFAEFC2', 'Caducidad próxima': 'FFFBE5D3', Caducada: 'FFF8DEDB' }
+    const colores: Record<string, string> = { Vigente: 'FFE1EFE4', 'Caducidad próxima': 'FFFAEFC2', Condicionada: 'FFFBE5D3', Caducada: 'FFF8DEDB', 'Pasado o archivado': 'FFD9E6F5', 'No legalizado': 'FFE6E4DC' }
     ws.eachRow((row, i) => {
       if (i === 1) return
       const c = colores[String(row.getCell(8).value)]

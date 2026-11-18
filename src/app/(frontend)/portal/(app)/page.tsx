@@ -11,7 +11,7 @@ import type { Documento, Empresa, User } from '@/payload-types'
 export const metadata = { title: 'Panel' }
 
 const PLAZOS = [30, 60, 90]
-const VISIBLES: Estado[] = ['verde', 'amarillo', 'naranja', 'rojo']
+const VISIBLES: Estado[] = ['verde', 'amarillo', 'naranja', 'rojo', 'azul', 'negro']
 
 export default async function PanelPage({ searchParams }: { searchParams: Promise<{ empresa?: string; plazo?: string; filtro?: string; q?: string }> }) {
   const sp = await searchParams
@@ -26,13 +26,13 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
 
   // overrideAccess: false: el control de acceso por empresa se aplica siempre en el servidor.
   const [docs, categorias] = await Promise.all([
-    payload.find({ collection: 'documentos', user, overrideAccess: false, depth: 1, limit: 5000, where: { empresa: { equals: empresa.id }, estado: { not_equals: 'negro' } }, sort: 'fechaCaducidad' }),
+    payload.find({ collection: 'documentos', user, overrideAccess: false, depth: 1, limit: 5000, where: { empresa: { equals: empresa.id } }, sort: 'fechaCaducidad' }),
     payload.find({ collection: 'categorias', user, overrideAccess: false, depth: 0, limit: 500, where: { empresa: { equals: empresa.id }, archivada: { not_equals: true } }, sort: 'orden' }),
   ])
 
   const lista = docs.docs as Documento[]
   const cuenta = (e: Estado) => lista.filter((d) => d.estado === e).length
-  const proximos = lista.filter((d) => d.estado === 'rojo' || d.estado === 'amarillo' || (d.fechaCaducidad && new Date(d.fechaCaducidad) <= limite))
+  const proximos = lista.filter((d) => d.estado !== 'azul' && d.estado !== 'negro' && (d.estado === 'rojo' || d.estado === 'amarillo' || d.estado === 'naranja' || (d.fechaCaducidad && new Date(d.fechaCaducidad) <= limite)))
   const qs = (p: number) => `?empresa=${empresa.id}&plazo=${p}`
 
   return (
@@ -56,7 +56,7 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
 
       <section aria-label="Resumen por estado" className="kpis">
         {VISIBLES.map((e) => (
-          <Link key={e} href={`/portal/documentos?empresa=${empresa.id}&estado=${e}`} className="kpi" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <Link key={e} href={`/portal/documentos?empresa=${empresa.id}&estado=${e}`} className={`kpi kpi--${e}`} style={{ textDecoration: 'none' }}>
             <StatusBadge estado={e} />
             <b>{cuenta(e)}</b>
           </Link>
@@ -114,8 +114,8 @@ async function Consolidado({ empresas, cmc, user, filtro, q }: { empresas: Empre
       return { e, c, peor, envios: porEmpresa(pendientes?.docs, e.id), hilos: porEmpresa(abiertos?.docs, e.id) }
     })
     .filter((f) => !q || f.e.razonSocial.toLowerCase().includes(q.toLowerCase()) || f.e.cif.toLowerCase().includes(q.toLowerCase()))
-    .filter((f) => (filtro === 'atencion' ? f.c.rojo + f.c.naranja + f.c.amarillo > 0 || f.envios > 0 : filtro === 'gestionado' ? f.e.gestion === 'gestionado' : true))
-    .sort((a, b) => (filtro ? 0 : b.c.rojo - a.c.rojo || b.c.naranja - a.c.naranja))
+    .filter((f) => (filtro === 'atencion' ? f.c.negro + f.c.rojo + f.c.amarillo + f.c.naranja > 0 || f.envios > 0 : filtro === 'gestionado' ? f.e.gestion === 'gestionado' : true))
+    .sort((a, b) => (filtro ? 0 : b.c.negro - a.c.negro || b.c.rojo - a.c.rojo || b.c.amarillo - a.c.amarillo))
 
   const total = (k: Estado) => filas.reduce((s, f) => s + f.c[k], 0)
 
@@ -131,17 +131,11 @@ async function Consolidado({ empresas, cmc, user, filtro, q }: { empresas: Empre
 
       <section aria-label="Resumen" className="kpis">
         {VISIBLES.map((e) => (
-          <Link key={e} href={`/portal/documentos?estado=${e}`} className="kpi" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <Link key={e} href={`/portal/documentos?estado=${e}`} className={`kpi kpi--${e}`} style={{ textDecoration: 'none' }}>
             <StatusBadge estado={e} />
             <b>{total(e)}</b>
           </Link>
         ))}
-        {cmc && (
-          <Link href="/portal/enviar" className="kpi" style={{ textDecoration: 'none', color: 'inherit' }}>
-            <span className="tag">Envíos por revisar</span>
-            <b>{pendientes?.docs.length ?? 0}</b>
-          </Link>
-        )}
       </section>
 
       <form className="row" role="search">
@@ -166,7 +160,7 @@ async function Consolidado({ empresas, cmc, user, filtro, q }: { empresas: Empre
             </tr>
           </thead>
           <tbody>
-            {filas.length === 0 && <tr><td colSpan={8} className="muted">Ninguna empresa coincide.</td></tr>}
+            {filas.length === 0 && <tr><td colSpan={VISIBLES.length + (cmc ? 4 : 2)} className="muted">Ninguna empresa coincide.</td></tr>}
             {filas.map(({ e, c, peor, envios, hilos }) => (
               <tr key={e.id}>
                 <td>

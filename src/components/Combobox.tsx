@@ -1,7 +1,8 @@
 'use client'
 import { useEffect, useId, useState } from 'react'
+import { nombreDeOpcion, opcionNueva } from '@/lib/catalogoCampo'
 
-type Sugerencias = { opciones: string[]; exacta: string | null; similares: string[] }
+type Sugerencias = { opciones: { id: number | string; nombre: string }[]; exacta: string | null; similares: string[] }
 
 /** Campo con autocompletado de los catálogos de nombres y aviso de nombres parecidos (RF-28). */
 export function Combobox({ tipo, name, id, defaultValue, placeholder, categoria }: { tipo: 'categoria' | 'documento' | 'relacion'; name: string; id: string; defaultValue?: string; placeholder?: string; categoria?: string }) {
@@ -26,8 +27,11 @@ export function Combobox({ tipo, name, id, defaultValue, placeholder, categoria 
 
   return (
     <>
-      <input id={id} name={name} list={lista} value={valor} placeholder={placeholder} autoComplete="off" onChange={(e) => setValor(e.target.value)} />
-      <datalist id={lista}>{s.opciones.map((o) => <option key={o} value={o} />)}</datalist>
+      <input id={id} name={name} list={lista} value={valor} placeholder={placeholder} autoComplete="off" onChange={(e) => setValor(nombreDeOpcion(e.target.value))} />
+      <datalist id={lista}>
+        {s.opciones.map((o) => <option key={o.id} value={o.nombre} />)}
+        {valor.trim() && !s.exacta && <option value={opcionNueva(valor)} />}
+      </datalist>
       {s.exacta && s.exacta !== valor && (
         <span className="hint">Se guardará como <button type="button" className="enlace" onClick={() => setValor(s.exacta!)}>«{s.exacta}»</button></span>
       )}

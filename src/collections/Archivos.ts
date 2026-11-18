@@ -50,7 +50,7 @@ export const Archivos: CollectionConfig = {
         const update: Record<string, unknown> = {}
         if (efectos.includes('sustituye')) {
           update.archivoVigente = doc.id
-          // Los anteriores quedan en el histórico como «No aplica», visibles solo dentro del documento.
+          // Los anteriores quedan en el histórico, visibles solo dentro del documento.
           await req.payload.update({
             collection: 'archivos',
             where: { and: [{ documento: { equals: docId } }, { id: { not_equals: doc.id } }, { historico: { equals: false } }] },
@@ -66,7 +66,7 @@ export const Archivos: CollectionConfig = {
           update.estadoManual = null
           update.motivoEstado = null
         }
-        if (efectos.includes('levanta') && actual.estadoManual === 'amarillo') {
+        if (efectos.includes('levanta') && actual.estadoManual === 'naranja') {
           update.estadoManual = null
           update.motivoEstado = null
         }
@@ -116,7 +116,7 @@ export const Archivos: CollectionConfig = {
       ],
     },
     { name: 'comentario', type: 'textarea' },
-    { name: 'historico', type: 'checkbox', defaultValue: false, index: true, admin: { readOnly: true, description: 'Sustituido: estado Negro (No aplica).' } },
+    { name: 'historico', type: 'checkbox', defaultValue: false, index: true, admin: { readOnly: true, description: 'Sustituido: queda en el histórico del documento.' } },
     { name: 'tamanoOriginal', label: 'Tamaño original (bytes)', type: 'number', admin: { readOnly: true, position: 'sidebar' } },
     { name: 'subidoPor', type: 'relationship', relationTo: 'users', admin: { readOnly: true }, access: { update: ({ req }) => isSuperAdmin(req) } },
   ],

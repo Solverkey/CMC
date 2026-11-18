@@ -17,6 +17,7 @@ export default async function EnviarPage({ searchParams }: { searchParams: Promi
   if (!empresa) return <p>No tiene ninguna empresa asignada.</p>
 
   const estado = (['pendiente', 'publicado', 'rechazado'] as const).find((e) => e === sp.estado) ?? (cmc ? 'pendiente' : undefined)
+  const categorias = cmc ? null : await payload.find({ collection: 'categorias', where: { and: [{ empresa: { equals: empresa.id } }, { archivada: { not_equals: true } }] }, user, overrideAccess: false, depth: 0, limit: 200, sort: 'orden' })
   const envios = await payload.find({
     collection: 'envios',
     user,
@@ -39,7 +40,7 @@ export default async function EnviarPage({ searchParams }: { searchParams: Promi
             : 'CMC revisa cada envío, completa la categoría y las fechas, y lo publica en su portal. Le avisaremos por correo.'}
         </p>
       </div>
-      {!cmc && <section className="card"><EnviarForm empresaId={String(empresa.id)} /></section>}
+      {!cmc && <section className="card"><EnviarForm empresaId={String(empresa.id)} categorias={categorias?.docs.map((c) => ({ id: String(c.id), nombre: c.nombre })) ?? []} /></section>}
 
       <section className="stack">
         <div className="row" style={{ justifyContent: 'space-between' }}>

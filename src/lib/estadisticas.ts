@@ -12,7 +12,7 @@ async function filas<T>(payload: Payload, q: SQL): Promise<T[]> {
   return db.drizzle.all!(q)
 }
 
-export type ConteoEstados = Record<string, { verde: number; amarillo: number; naranja: number; rojo: number; negro: number }>
+export type ConteoEstados = Record<string, { verde: number; amarillo: number; naranja: number; rojo: number; azul: number; negro: number }>
 
 /** Documentos por empresa y estado. `empresas` = null para todas (solo CMC). */
 export async function conteoPorEmpresa(payload: Payload, empresas: (number | string)[] | null): Promise<ConteoEstados> {
@@ -22,7 +22,7 @@ export async function conteoPorEmpresa(payload: Payload, empresas: (number | str
   const out: ConteoEstados = {}
   for (const r of rows) {
     const k = String(r.empresa)
-    out[k] ??= { verde: 0, amarillo: 0, naranja: 0, rojo: 0, negro: 0 }
+    out[k] ??= { verde: 0, amarillo: 0, naranja: 0, rojo: 0, azul: 0, negro: 0 }
     if (r.estado in out[k]) out[k][r.estado as keyof ConteoEstados[string]] = Number(r.n)
   }
   return out

@@ -38,7 +38,7 @@ export function TablaDocumentos({ docs, empresa, vacio, conEmpresa }: { docs: Do
                 </td>
                 <td>
                   <StatusBadge estado={d.estado as Estado} />
-                  {d.estadoManual === 'amarillo' && d.estado !== 'amarillo' && <span style={{ display: 'block', marginTop: 4 }}><StatusBadge estado="amarillo" /></span>}
+                  {d.estadoManual === 'naranja' && d.estado !== 'naranja' && <span style={{ display: 'block', marginTop: 4 }}><StatusBadge estado="naranja" /></span>}
                 </td>
               </tr>
             )

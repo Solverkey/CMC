@@ -66,7 +66,7 @@ export async function usarNombre(req: PayloadRequest, tipo: TipoCatalogo, nombre
 
 export type Sugerencias = {
   opciones: { id: number | string; nombre: string; usos: number; efectos?: string[] | null }[]
-  exacta: boolean
+  exacta: string | null
   similares: string[]
 }
 
@@ -97,7 +97,7 @@ export async function sugerir(req: PayloadRequest, tipo: TipoCatalogo, q = '', c
   const filtradas = docs
     .filter((d) => !nq || d.normalizado?.includes(nq) || normalizar(d.nombre).includes(nq))
     .sort((a, b) => (enCategoria.get(b.normalizado ?? '') ?? 0) - (enCategoria.get(a.normalizado ?? '') ?? 0) || (b.usos ?? 0) - (a.usos ?? 0) || a.nombre.localeCompare(b.nombre, 'es'))
-  const exacta = Boolean(q.trim()) && docs.some((d) => d.nombre.trim().toLowerCase() === q.trim().toLowerCase())
+  const exacta = q.trim() ? docs.find((d) => d.nombre.trim().toLowerCase() === q.trim().toLowerCase())?.nombre ?? null : null
   const similares = q.trim() && !exacta ? docs.filter((d) => parecidos(d.nombre, q)).map((d) => d.nombre).slice(0, 5) : []
   return {
     opciones: filtradas.slice(0, limite).map((d) => ({ id: d.id, nombre: d.nombre, usos: d.usos ?? 0, efectos: d.efectos })),

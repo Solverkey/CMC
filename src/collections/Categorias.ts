@@ -4,8 +4,8 @@ import { auditar } from '../lib/actividad'
 import { usarNombre } from '../lib/catalogo'
 import { gestionField } from './Empresas'
 
-export const campoCatalogo = (tipo: 'categoria' | 'documento' | 'relacion') => ({
-  Field: { path: '/components/admin/CampoCatalogo#CampoCatalogo', clientProps: { tipo } },
+export const campoCatalogo = (tipo: 'categoria' | 'documento' | 'relacion', categoria?: string) => ({
+  Field: { path: '/components/admin/CampoCatalogo#CampoCatalogo', clientProps: { tipo, categoria } },
 })
 
 export const Categorias: CollectionConfig = {
@@ -25,7 +25,7 @@ export const Categorias: CollectionConfig = {
     ],
   },
   fields: [
-    { name: 'nombre', type: 'text', required: true, admin: { description: 'ISO, OCA, Licencias, Proyectos… Escriba para buscar en el catálogo o añadir un nombre nuevo.', components: campoCatalogo('categoria') } },
+    { name: 'nombre', type: 'text', required: true, admin: { description: 'Tipo de instalación: alta tensión, baja tensión… Escriba para buscar en el catálogo o añadir un nombre nuevo.', components: campoCatalogo('categoria') } },
     { name: 'empresa', type: 'relationship', relationTo: 'empresas', required: true, index: true },
     { name: 'descripcion', label: 'Descripción', type: 'textarea' },
     {

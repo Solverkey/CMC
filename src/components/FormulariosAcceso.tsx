@@ -1,6 +1,7 @@
 'use client'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { CampoPassword } from '@/components/CampoPassword'
 
 const mensajeDe = async (res: Response, def: string) => (await res.json().catch(() => null))?.errors?.[0]?.message ?? def
 
@@ -31,18 +32,19 @@ export function NuevaPasswordForm({ token, invitacion }: { token?: string; invit
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [cargando, setCargando] = useState(false)
+  const [password, setPassword] = useState('')
+  const [repetir, setRepetir] = useState('')
   return (
     <form
       className="stack"
       onSubmit={async (e) => {
         e.preventDefault()
-        const f = new FormData(e.currentTarget)
-        if (f.get('password') !== f.get('repetir')) return setError('Las contraseñas no coinciden.')
+        if (password !== repetir) return setError('Las contraseñas no coinciden.')
         setError(null)
         setCargando(true)
         const res = invitacion
-          ? await fetch('/api/users/aceptar-invitacion', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: invitacion, password: f.get('password') }) })
-          : await fetch('/api/users/reset-password', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, password: f.get('password') }) })
+          ? await fetch('/api/users/aceptar-invitacion', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: invitacion, password }) })
+          : await fetch('/api/users/reset-password', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, password }) })
         setCargando(false)
         if (!res.ok) return setError(await mensajeDe(res, 'El enlace no es válido o ha caducado.'))
         router.push(invitacion ? '/portal/login?bienvenida=1' : '/portal')
@@ -50,9 +52,8 @@ export function NuevaPasswordForm({ token, invitacion }: { token?: string; invit
       }}
     >
       {error && <p role="alert" className="alert alert--error">{error}</p>}
-      <div className="field"><label htmlFor="password">Contraseña</label><input id="password" name="password" type="password" autoComplete="new-password" minLength={10} required /></div>
-      <div className="field"><label htmlFor="repetir">Repita la contraseña</label><input id="repetir" name="repetir" type="password" autoComplete="new-password" minLength={10} required /></div>
-      <span className="hint">Al menos 10 caracteres, con letras y números.</span>
+      <CampoPassword id="password" name="password" label="Contraseña" autoComplete="new-password" reglas value={password} onChange={setPassword} />
+      <CampoPassword id="repetir" name="repetir" label="Repita la contraseña" autoComplete="new-password" value={repetir} onChange={setRepetir} coincide={password} />
       <button className="btn btn--primary" disabled={cargando} style={{ justifyContent: 'center' }}>{invitacion ? 'Activar mi cuenta' : 'Guardar contraseña'}</button>
     </form>
   )
