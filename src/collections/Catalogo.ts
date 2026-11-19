@@ -27,7 +27,8 @@ export const Catalogo: CollectionConfig = {
   labels: { singular: 'Nombre de catálogo', plural: 'Catálogos' },
   admin: { useAsTitle: 'nombre', defaultColumns: ['nombre', 'tipo', 'usos', 'activo'], group: 'Plataforma', listSearchableFields: ['nombre', 'normalizado'] },
   defaultSort: '-usos',
-  access: { read: autenticado, create: soloSuperAdmin, update: soloSuperAdmin, delete: nadie },
+  // Los clientes solo leen los tipos de relación; los nombres de documento y categoría les llegan filtrados por empresa en «sugerencias».
+  access: { read: (args) => isSuperAdmin(args.req) || (autenticado(args) ? { tipo: { equals: 'relacion' } } : false), create: soloSuperAdmin, update: soloSuperAdmin, delete: nadie },
   endpoints: [
     {
       path: '/sugerencias',

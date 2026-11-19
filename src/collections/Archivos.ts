@@ -7,7 +7,7 @@ import { urlServidor } from '../lib/configuracion'
 import { programarCorreo } from '../lib/correo'
 import { usuariosEmpresa } from '../lib/destinatarios'
 import { dirSubidas } from '../lib/ficheros'
-import { MIME_DOCUMENTOS, comprimirImagenes, guardarOriginal, registrarDescarga, tamano } from '../lib/subidas'
+import { MIME_DOCUMENTOS, comprimirImagenes, ficheroInmutable, guardarOriginal, registrarDescarga, tamano } from '../lib/subidas'
 import { campoCatalogo } from './Categorias'
 
 const idDe = (v: unknown) => (v && typeof v === 'object' && 'id' in v ? (v as { id: number | string }).id : (v as number | string))
@@ -21,9 +21,10 @@ export const Archivos: CollectionConfig = {
     staticDir: dirSubidas('archivos'),
     mimeTypes: MIME_DOCUMENTOS,
     handlers: [registrarDescarga],
+    hideRemoveFile: true,
   },
   hooks: {
-    beforeOperation: [comprimirImagenes],
+    beforeOperation: [ficheroInmutable, comprimirImagenes],
     beforeChange: [
       async ({ data, req, operation, originalDoc }) => {
         const docId = idDe(data.documento ?? originalDoc?.documento)

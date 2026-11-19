@@ -1,4 +1,6 @@
-import type { PayloadRequest } from 'payload'
+import type { PayloadRequest, Where } from 'payload'
+import { empresasDe, isSuperAdmin } from '../access'
+import { leerConfiguracion } from './configuracion'
 import { normalizar, parecidos } from './texto'
 
 export type TipoCatalogo = 'categoria' | 'documento' | 'relacion'
@@ -76,7 +78,7 @@ export type Sugerencias = {
  * ya usados en la misma categoría.
  */
 export async function sugerir(req: PayloadRequest, tipo: TipoCatalogo, q = '', categoria?: string | null, limite = 12): Promise<Sugerencias> {
-  const { docs } = await req.payload.find({
+  const { docs: todos } = await req.payload.find({
     collection: 'catalogo',
     where: { and: [{ tipo: { equals: tipo } }, { activo: { equals: true } }] },
     limit: 5000,
@@ -85,11 +87,14 @@ export async function sugerir(req: PayloadRequest, tipo: TipoCatalogo, q = '', c
     overrideAccess: true,
     req,
   })
+  const propios = isSuperAdmin(req) || tipo === 'relacion' ? null : await nombresPropios(req, tipo)
+  const docs = propios ? todos.filter((d) => propios.has(d.normalizado ?? normalizar(d.nombre))) : todos
   const enCategoria = new Map<string, number>()
   if (tipo === 'documento' && categoria) {
     const cat = await req.payload.findByID({ collection: 'categorias', id: categoria, depth: 0, user: req.user, overrideAccess: false, req }).catch(() => null)
     if (cat) {
-      const usados = await req.payload.find({ collection: 'documentos', where: { 'categoria.nombre': { equals: cat.nombre } }, select: { titulo: true }, limit: 2000, depth: 0, overrideAccess: true, req })
+      const where: Where = { and: [{ 'categoria.nombre': { equals: cat.nombre } }, ...(propios ? [{ empresa: { in: empresasDe(req.user) } }] : [])] }
+      const usados = await req.payload.find({ collection: 'documentos', where, select: { titulo: true }, limit: 2000, depth: 0, overrideAccess: true, req })
       for (const d of usados.docs) enCategoria.set(normalizar(d.titulo), (enCategoria.get(normalizar(d.titulo)) ?? 0) + 1)
     }
   }
@@ -104,6 +109,23 @@ export async function sugerir(req: PayloadRequest, tipo: TipoCatalogo, q = '', c
     exacta,
     similares,
   }
+}
+
+/** Nombres que un cliente puede ver: los de sus empresas y, para categorías, la plantilla común de CMC. */
+async function nombresPropios(req: PayloadRequest, tipo: 'categoria' | 'documento') {
+  const empresas = empresasDe(req.user)
+  const nombres = new Set<string>()
+  if (!empresas.length) return nombres
+  const where: Where = { empresa: { in: empresas } }
+  if (tipo === 'documento') {
+    const { docs } = await req.payload.find({ collection: 'documentos', where, select: { titulo: true }, limit: 0, pagination: false, depth: 0, overrideAccess: true, req })
+    for (const d of docs) nombres.add(normalizar(d.titulo))
+  } else {
+    const { docs } = await req.payload.find({ collection: 'categorias', where, select: { nombre: true }, limit: 0, pagination: false, depth: 0, overrideAccess: true, req })
+    for (const c of docs) nombres.add(normalizar(c.nombre))
+    for (const c of (await leerConfiguracion(req.payload, req)).plantillaCategorias) nombres.add(normalizar(c.nombre))
+  }
+  return nombres
 }
 
 /** Efectos de un tipo de relación según el catálogo. */

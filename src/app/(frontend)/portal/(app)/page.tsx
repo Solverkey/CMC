@@ -3,7 +3,7 @@ import { Icon } from '@/components/Icon'
 import { StatusBadge } from '@/components/StatusBadge'
 import { TablaDocumentos } from '@/components/TablaDocumentos'
 import { empresasDe } from '@/access'
-import { peorEstado, type Estado } from '@/lib/estado'
+import { ESTADOS, peorEstado, type Estado } from '@/lib/estado'
 import { conteoPorEmpresa } from '@/lib/estadisticas'
 import { contexto, empresasDelUsuario, idDe } from '@/lib/payload'
 import type { Documento, Empresa, User } from '@/payload-types'
@@ -31,7 +31,8 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
   ])
 
   const lista = docs.docs as Documento[]
-  const cuenta = (e: Estado) => lista.filter((d) => d.estado === e).length
+  const visibles = cmc ? VISIBLES : VISIBLES.filter((e) => e !== 'azul')
+  const cuenta = (e: Estado, de = lista) => de.filter((d) => d.estado === e).length
   const proximos = lista.filter((d) => d.estado !== 'azul' && d.estado !== 'negro' && (d.estado === 'rojo' || d.estado === 'amarillo' || d.estado === 'naranja' || (d.fechaCaducidad && new Date(d.fechaCaducidad) <= limite)))
   const qs = (p: number) => `?empresa=${empresa.id}&plazo=${p}`
 
@@ -55,7 +56,7 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
       </div>
 
       <section aria-label="Resumen por estado" className="kpis">
-        {VISIBLES.map((e) => (
+        {visibles.map((e) => (
           <Link key={e} href={`/portal/documentos?empresa=${empresa.id}&estado=${e}`} className={`kpi kpi--${e}`} style={{ textDecoration: 'none' }}>
             <StatusBadge estado={e} />
             <b>{cuenta(e)}</b>
@@ -80,12 +81,20 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
           <h2 style={{ fontSize: 22, lineHeight: '28px', marginBottom: 8 }}>Por categoría</h2>
           {categorias.docs.length === 0 && <p className="muted">Sin categorías.</p>}
           {categorias.docs.map((c) => {
-            const deCat = lista.filter((d) => idDe(d.categoria) === String(c.id))
+            const deCat = lista.filter((d) => idDe(d.categoria) === String(c.id) && visibles.includes(d.estado as Estado))
             const peor = peorEstado(deCat.map((d) => d.estado as Estado))
+            const colores = visibles.filter((e) => e !== peor && cuenta(e, deCat) > 0).sort((a, b) => ESTADOS[b].prioridad - ESTADOS[a].prioridad)
             return (
-              <Link key={c.id} href={`/portal/documentos?empresa=${empresa.id}&categoria=${c.id}`} className="row" style={{ justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--line)', textDecoration: 'none', color: 'inherit' }}>
-                <strong>{c.nombre}</strong>
-                {deCat.length ? <StatusBadge estado={peor} count={deCat.filter((d) => d.estado === peor).length} /> : <span className="muted small">Vacía</span>}
+              <Link key={c.id} href={`/portal/documentos?empresa=${empresa.id}&categoria=${c.id}`} className="stack" style={{ gap: 6, padding: '10px 0', borderBottom: '1px solid var(--line)', textDecoration: 'none', color: 'inherit' }}>
+                <span className="row" style={{ justifyContent: 'space-between' }}>
+                  <strong>{c.nombre}</strong>
+                  {!deCat.length ? <span className="muted small">Vacía</span> : cuenta(peor, deCat) > 0 && <StatusBadge estado={peor} count={cuenta(peor, deCat)} />}
+                </span>
+                {colores.length > 0 && (
+                  <span className="row" style={{ gap: 6, justifyContent: 'flex-end' }}>
+                    {colores.map((e) => <StatusBadge key={e} estado={e} count={cuenta(e, deCat)} />)}
+                  </span>
+                )}
               </Link>
             )
           })}
@@ -99,6 +108,7 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
 async function Consolidado({ empresas, cmc, user, filtro, q }: { empresas: Empresa[]; cmc: boolean; user: User; filtro?: string; q?: string }) {
   const { payload } = await contexto()
   const conteo = await conteoPorEmpresa(payload, cmc ? null : empresasDe(user))
+  const visibles = cmc ? VISIBLES : VISIBLES.filter((e) => e !== 'azul')
   const [pendientes, abiertos] = cmc
     ? await Promise.all([
         payload.find({ collection: 'envios', where: { estado: { equals: 'pendiente' } }, limit: 0, pagination: false, depth: 0, overrideAccess: true, select: { empresa: true } }),
@@ -130,7 +140,7 @@ async function Consolidado({ empresas, cmc, user, filtro, q }: { empresas: Empre
       </div>
 
       <section aria-label="Resumen" className="kpis">
-        {VISIBLES.map((e) => (
+        {visibles.map((e) => (
           <Link key={e} href={`/portal/documentos?estado=${e}`} className={`kpi kpi--${e}`} style={{ textDecoration: 'none' }}>
             <StatusBadge estado={e} />
             <b>{total(e)}</b>
@@ -154,13 +164,13 @@ async function Consolidado({ empresas, cmc, user, filtro, q }: { empresas: Empre
             <tr>
               <th>Empresa</th>
               <th>Estado</th>
-              {VISIBLES.map((e) => <th key={e}><span className={`status status--${e}`} style={{ padding: 0, background: 'none' }} /></th>)}
+              {visibles.map((e) => <th key={e}><span className={`status status--${e}`} style={{ padding: 0, background: 'none' }} /></th>)}
               {cmc && <th>Envíos</th>}
               {cmc && <th>Mensajes</th>}
             </tr>
           </thead>
           <tbody>
-            {filas.length === 0 && <tr><td colSpan={VISIBLES.length + (cmc ? 4 : 2)} className="muted">Ninguna empresa coincide.</td></tr>}
+            {filas.length === 0 && <tr><td colSpan={visibles.length + (cmc ? 4 : 2)} className="muted">Ninguna empresa coincide.</td></tr>}
             {filas.map(({ e, c, peor, envios, hilos }) => (
               <tr key={e.id}>
                 <td>
@@ -168,7 +178,7 @@ async function Consolidado({ empresas, cmc, user, filtro, q }: { empresas: Empre
                   <span className="muted" style={{ display: 'block' }}>{e.cif}{e.gestion === 'gestionado' ? ' · Gestionado por CMC' : ''}</span>
                 </td>
                 <td><StatusBadge estado={peor} /></td>
-                {VISIBLES.map((k) => <td key={k}>{c[k] || <span className="muted">0</span>}</td>)}
+                {visibles.map((k) => <td key={k}>{c[k] || <span className="muted">0</span>}</td>)}
                 {cmc && <td>{envios ? <Link href={`/portal/enviar?empresa=${e.id}`}>{envios}</Link> : <span className="muted">0</span>}</td>}
                 {cmc && <td>{hilos ? <Link href={`/portal/mensajes?empresa=${e.id}`}>{hilos}</Link> : <span className="muted">0</span>}</td>}
               </tr>

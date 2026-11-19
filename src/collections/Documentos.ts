@@ -60,19 +60,25 @@ export const Documentos: CollectionConfig = {
           await registrar(req, { accion: 'alta', descripcion: `Alta del documento «${doc.titulo}»`, empresa, coleccion: 'documentos', registroId: doc.id })
           return doc
         }
-        if (previousDoc.estado !== doc.estado) {
-          const manual = doc.estadoManual !== previousDoc.estadoManual
+        const manual = (doc.estadoManual ?? null) !== (previousDoc.estadoManual ?? null)
+        const diff = cambios(previousDoc, doc)
+        delete diff.estado
+        if (previousDoc.estado !== doc.estado || manual) {
+          delete diff.estadoManual
+          delete diff.motivoEstado
+          const manualDe = (v: unknown) => (v ? ESTADOS[v as Estado]?.label : 'ninguno')
           await registrar(req, {
             accion: 'cambio_estado',
-            descripcion: `«${doc.titulo}»: ${ESTADOS[previousDoc.estado as Estado]?.label ?? '—'} → ${ESTADOS[doc.estado as Estado].label}${manual ? ' (manual)' : ' (automático)'}`,
+            descripcion:
+              previousDoc.estado !== doc.estado
+                ? `«${doc.titulo}»: ${ESTADOS[previousDoc.estado as Estado]?.label ?? '—'} → ${ESTADOS[doc.estado as Estado].label}${manual ? ' (manual)' : ' (automático)'}`
+                : `«${doc.titulo}»: estado manual ${manualDe(previousDoc.estadoManual)} → ${manualDe(doc.estadoManual)} (se mantiene ${ESTADOS[doc.estado as Estado].label})`,
             empresa,
             coleccion: 'documentos',
             registroId: doc.id,
-            datos: { antes: previousDoc.estado, despues: doc.estado, manual, motivo: manual ? doc.motivoEstado ?? null : 'Cálculo por fechas' },
+            datos: { antes: previousDoc.estado, despues: doc.estado, manual, estadoManual: doc.estadoManual ?? null, motivo: manual ? doc.motivoEstado ?? null : 'Cálculo por fechas' },
           })
         }
-        const diff = cambios(previousDoc, doc)
-        delete diff.estado
         if (Object.keys(diff).length) {
           await registrar(req, {
             accion: 'edicion',

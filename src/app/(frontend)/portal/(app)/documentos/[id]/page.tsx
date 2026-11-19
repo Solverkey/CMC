@@ -6,7 +6,7 @@ import { Icon } from '@/components/Icon'
 import { StatusBadge } from '@/components/StatusBadge'
 import { resolverGestion, type Estado } from '@/lib/estado'
 import { tamano } from '@/lib/subidas'
-import { contexto, fmt, fmtHora } from '@/lib/payload'
+import { contexto, fmt, fmtHora, idDe } from '@/lib/payload'
 import type { Archivo, Categoria, Empresa, User } from '@/payload-types'
 
 export default async function DocumentoPage({ params }: { params: Promise<{ id: string }> }) {
@@ -21,7 +21,9 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
     payload.find({ collection: 'archivos', user, overrideAccess: false, depth: 1, limit: 200, sort: '-createdAt', where: { documento: { equals: doc.id } } }),
     payload.find({ collection: 'hilos', user, overrideAccess: false, depth: 0, limit: 50, sort: '-ultimoMensaje', where: { documento: { equals: doc.id } } }),
   ])
-  const vigente = archivos.docs.find((a) => !a.historico)
+  const vigenteId = idDe(doc.archivoVigente)
+  // Un anexo (complementario) nunca es el vigente; si el documento no lo tiene fijado, el último que sustituye.
+  const vigente = archivos.docs.find((a) => String(a.id) === vigenteId) ?? archivos.docs.find((a) => !a.historico && a.efectos?.includes('sustituye'))
   const gestion = resolverGestion(empresa?.gestion, categoria?.gestion, doc.gestion)
   const tecnico = [doc.tecnico, categoria?.responsable, empresa?.tecnico].find((t) => t && typeof t === 'object') as User | undefined
 
@@ -121,7 +123,7 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
               <li key={a.id}>
                 <span className={`dot${a.historico ? ' dot--azul' : ''}`} aria-hidden="true" />
                 <div className="stack" style={{ gap: 0 }}>
-                  <strong>{a.relacion}{a.historico ? ' · Histórico' : ' · Vigente'}</strong>
+                  <strong>{a.relacion}{a.historico ? ' · Histórico' : a.id === vigente?.id ? ' · Vigente' : ''}</strong>
                   <span className="muted">{fmt(a.createdAt)}{typeof a.subidoPor === 'object' && a.subidoPor ? ` · ${a.subidoPor.nombre}` : ''}</span>
                   {a.url && <a href={a.url} target="_blank" rel="noreferrer">{a.filename}</a>}
                   {a.comentario && <span className="muted">{a.comentario}</span>}

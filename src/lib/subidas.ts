@@ -52,6 +52,13 @@ export const comprimirImagenes: CollectionBeforeOperationHook = async ({ args, o
   return args
 }
 
+/** Ningún fichero se borra físicamente: al cambiar el fichero de un registro, Payload borraría el anterior. */
+export const ficheroInmutable: CollectionBeforeOperationHook = ({ args, operation, req }) => {
+  if (operation === 'update' && (req.file as Fichero | undefined)?.data)
+    throw new APIError('El fichero ya subido no se puede sustituir. Añada uno nuevo (renovación, actualización…) y el anterior quedará en el histórico.', 400, null, true)
+  return args
+}
+
 /** Si la configuración lo pide, la imagen original queda guardada aparte (solo visible para CMC). */
 export const guardarOriginal: CollectionAfterChangeHook = async ({ doc, req, collection, operation }) => {
   const original = req.context.imagenOriginal as Fichero | undefined

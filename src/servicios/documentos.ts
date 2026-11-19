@@ -3,7 +3,7 @@ import JSZip from 'jszip'
 import type { PayloadRequest, Where } from 'payload'
 import { APIError } from 'payload'
 import type { Archivo, Categoria, Documento, Empresa } from '@/payload-types'
-import { puedeVerEmpresa } from '../access'
+import { isSuperAdmin, puedeVerEmpresa } from '../access'
 import { registrar } from '../lib/actividad'
 import { crearTokenFirmado, leerTokenFirmado } from '../lib/cifrado'
 import { urlServidor } from '../lib/configuracion'
@@ -37,6 +37,8 @@ export async function buscarDocumentos(req: PayloadRequest, f: Filtros) {
   if (f.empresa) and.push({ empresa: { equals: f.empresa } })
   if (f.categoria) and.push({ categoria: { equals: f.categoria } })
   if (f.estados?.length) and.push({ estado: { in: f.estados } })
+  // Los pasados o archivados solo se ven dentro de su documento; CMC puede listarlos con el filtro.
+  if (!(isSuperAdmin(req) && f.estados?.includes('azul'))) and.push({ estado: { not_equals: 'azul' } })
   if (f.desde) and.push({ fechaCaducidad: { greater_than_equal: new Date(f.desde).toISOString() } })
   if (f.hasta) and.push({ fechaCaducidad: { less_than_equal: new Date(`${f.hasta}T23:59:59`).toISOString() } })
   return req.payload.find({

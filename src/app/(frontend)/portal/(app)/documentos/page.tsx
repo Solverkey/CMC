@@ -15,7 +15,7 @@ const FILTROS: Estado[] = ['verde', 'amarillo', 'naranja', 'rojo', 'azul', 'negr
 
 export default async function DocumentosPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams
-  const { payload, user, req } = await contexto('/portal/documentos')
+  const { payload, user, req, cmc } = await contexto('/portal/documentos')
   const { empresas } = await empresasDelUsuario(user)
   const estados = ([] as string[]).concat(sp.estado ?? []).filter(Boolean) as Estado[]
   const pagina = Math.max(Number(sp.pagina) || 1, 1)
@@ -82,7 +82,7 @@ export default async function DocumentosPage({ searchParams }: { searchParams: P
         </div>
         <fieldset className="row" style={{ border: 0, padding: 0, margin: 0 }}>
           <legend className="sr-only">Estado</legend>
-          {FILTROS.map((e) => (
+          {FILTROS.filter((e) => cmc || e !== 'azul').map((e) => (
             <label key={e} className="row small" style={{ gap: 6 }}>
               <input type="checkbox" name="estado" value={e} defaultChecked={estados.includes(e)} />
               <span className={`status status--${e}`}>{ESTADOS[e].label}</span>
@@ -128,7 +128,10 @@ export default async function DocumentosPage({ searchParams }: { searchParams: P
                       {d.fechaCaducidad ? fmt(d.fechaCaducidad) : 'Indefinido'}
                       {dias !== null && <span className="muted" style={{ display: 'block' }}>{dias < 0 ? `Caducó hace ${-dias} días` : `Faltan ${dias} días`}</span>}
                     </td>
-                    <td><StatusBadge estado={d.estado as Estado} /></td>
+                    <td>
+                      <StatusBadge estado={d.estado as Estado} />
+                      {d.estadoManual === 'naranja' && d.estado !== 'naranja' && <span style={{ display: 'block', marginTop: 4 }}><StatusBadge estado="naranja" /></span>}
+                    </td>
                   </tr>
                 )
               })}

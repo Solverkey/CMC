@@ -1,10 +1,15 @@
 // @vitest-environment node
-import { getPayload, type Payload } from 'payload'
+import fs from 'fs/promises'
+import path from 'path'
+import sharp from 'sharp'
+import { createLocalReq, getPayload, type Payload } from 'payload'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import config from '@/payload.config'
+import { sugerir } from '@/lib/catalogo'
 import { cifrar } from '@/lib/cifrado'
 import { codigo, nuevoSecreto } from '@/lib/totp'
 import type { User } from '@/payload-types'
+import { buscarDocumentos } from '@/servicios/documentos'
 import { comprobarCodigoLogin } from '@/servicios/seguridad'
 
 /** Aislamiento de datos entre empresas y reglas de permisos, contra una base de datos de pruebas (tests/.cmc-test.db). */
@@ -18,7 +23,7 @@ const como = (user: User) => ({ user: { ...user, collection: 'users' } as never,
 
 beforeAll(async () => {
   payload = await getPayload({ config })
-  for (const c of ['actividad', 'correos', 'documentos', 'categorias', 'catalogo'] as const) await payload.delete({ collection: c, where: { id: { exists: true } }, overrideAccess: true }).catch(() => null)
+  for (const c of ['actividad', 'correos', 'archivos', 'documentos', 'categorias', 'catalogo'] as const) await payload.delete({ collection: c, where: { id: { exists: true } }, overrideAccess: true }).catch(() => null)
   await payload.db.deleteMany({ collection: 'users', where: {} })
   await payload.db.deleteMany({ collection: 'empresas', where: {} })
 
@@ -96,6 +101,45 @@ describe('super administrador y doble factor', () => {
     expect(() => comprobarCodigoLogin(u, '123')).toThrow()
     expect(comprobarCodigoLogin(u, codigo(s, paso))).toBe(paso)
     expect(() => comprobarCodigoLogin({ ...u, totpUltimoPaso: paso }, codigo(s, paso))).toThrow()
+  })
+})
+
+describe('listados, catálogo, ficheros y estados', () => {
+  const reqDe = (user: User) => createLocalReq({ user: { ...user, collection: 'users' } as never }, payload)
+  const imagen = async (name: string) => {
+    const data = await sharp({ create: { width: 8, height: 8, channels: 3, background: '#ffffff' } }).png().toBuffer()
+    return { data, mimetype: 'image/png', name, size: data.length }
+  }
+
+  it('los pasados o archivados no salen en los listados del cliente; CMC los ve con el filtro', async () => {
+    process.env.CMC_2FA_SUPERADMIN = 'opcional'
+    const d = await payload.create({ collection: 'documentos', data: { titulo: 'Doc archivado', empresa: ids.e1, categoria: ids.c1, estadoManual: 'azul', motivoEstado: 'Ya no aplica' }, context: ctx })
+    expect((await buscarDocumentos(await reqDe(ana), {})).docs.map((x) => x.id)).toEqual([ids.d1])
+    expect((await buscarDocumentos(await reqDe(ana), { estados: ['azul'] })).totalDocs).toBe(0)
+    expect((await buscarDocumentos(await reqDe(cmc), {})).docs.map((x) => x.id)).not.toContain(d.id)
+    expect((await buscarDocumentos(await reqDe(cmc), { estados: ['azul'] })).docs.map((x) => x.id)).toEqual([d.id])
+  })
+
+  it('un cliente solo ve en el catálogo los nombres de sus empresas', async () => {
+    const nombres = (await sugerir(await reqDe(ana), 'documento')).opciones.map((o) => o.nombre)
+    expect(nombres).toContain('Doc uno')
+    expect(nombres).not.toContain('Doc dos')
+    expect((await payload.find({ collection: 'catalogo', where: { tipo: { equals: 'documento' } }, ...como(ana) })).totalDocs).toBe(0)
+  })
+
+  it('el fichero de un archivo ya subido no se sustituye ni se borra', async () => {
+    const a = await payload.create({ collection: 'archivos', data: { documento: ids.d1, relacion: 'Original' } as never, file: await imagen('original.png'), context: ctx })
+    await expect(payload.update({ collection: 'archivos', id: a.id, data: {}, file: await imagen('otro.png'), overrideAccess: true, context: ctx })).rejects.toThrow(/no se puede sustituir/)
+    await expect(fs.access(path.join('tests/.uploads/archivos', a.filename!))).resolves.toBeUndefined()
+  })
+
+  it('un cambio manual que mantiene el color también queda registrado', async () => {
+    const d = await payload.create({ collection: 'documentos', data: { titulo: 'Doc caducado', empresa: ids.e1, categoria: ids.c1, fechaCaducidad: '2020-01-01' }, context: ctx })
+    expect(d.estado).toBe('rojo')
+    await payload.update({ collection: 'documentos', id: d.id, data: { estadoManual: 'rojo', motivoEstado: 'Revocado por el organismo' }, overrideAccess: true, context: ctx })
+    const r = await payload.find({ collection: 'actividad', where: { and: [{ accion: { equals: 'cambio_estado' } }, { registroId: { equals: String(d.id) } }] }, overrideAccess: true })
+    expect(r.totalDocs).toBe(1)
+    expect(r.docs[0].datos).toMatchObject({ manual: true, motivo: 'Revocado por el organismo' })
   })
 })
 
