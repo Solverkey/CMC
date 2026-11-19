@@ -39,6 +39,14 @@ const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
 
 const serverURL = (process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000').replace(/\/$/, '')
+
+// Payload ignora la cookie de sesión en peticiones POST cuyo origen no esté en esta lista (aparece «No autenticado»).
+// En Vercel se añaden sus direcciones (producción, rama y despliegue) y las de CMC_ORIGENES, separadas por comas.
+const origenes = [
+  serverURL,
+  ...[process.env.VERCEL_PROJECT_PRODUCTION_URL, process.env.VERCEL_BRANCH_URL, process.env.VERCEL_URL].filter(Boolean).map((h) => `https://${h}`),
+  ...(process.env.CMC_ORIGENES || '').split(',').map((o) => o.trim().replace(/\/$/, '')).filter(Boolean),
+].filter((o, i, todos) => todos.indexOf(o) === i)
 const databaseURL = urlPostgres(process.env.DATABASE_URL || 'file:./cmc.db')
 
 // Producción: Postgres en un servidor de la UE (DATABASE_URL=postgres://…). Local: SQLite en un fichero.
@@ -95,8 +103,8 @@ export default buildConfig({
   secret: process.env.PAYLOAD_SECRET || '',
   typescript: { outputFile: path.resolve(dirname, 'payload-types.ts') },
   graphQL: { disable: true },
-  cors: [serverURL],
-  csrf: [serverURL],
+  cors: origenes,
+  csrf: origenes,
   upload: { limits: { fileSize: MAX_BYTES } },
   db,
   email,
