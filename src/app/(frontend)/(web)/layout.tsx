@@ -1,4 +1,5 @@
 import { SiteFooter, SiteHeader } from '@/components/SiteHeader'
+import { AvisoCookies } from '@/components/web/AvisoCookies'
 import { payloadClient } from '@/lib/payload'
 import { leerWeb } from '@/lib/web'
 
@@ -15,6 +16,7 @@ export default async function WebLayout({ children }: { children: React.ReactNod
       <SiteHeader />
       <main id="contenido">{children}</main>
       <SiteFooter web={web} />
+      <AvisoCookies />
     </>
   )
 }

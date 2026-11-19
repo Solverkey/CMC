@@ -49,19 +49,27 @@ Las consultas se conservan el tiempo necesario para atenderlas y, como máximo, 
 ## Destinatarios
 No se ceden datos a terceros salvo obligación legal. Los proveedores que alojan la plataforma y envían el correo actúan como encargados del tratamiento, con contrato y con los datos alojados en la Unión Europea.
 
+## Cookies
+El detalle de las cookies, su duración y cómo aceptarlas o rechazarlas está en la política de cookies de este sitio.
+
 ## Sus derechos
 Puede ejercer los derechos de acceso, rectificación, supresión, oposición, limitación y portabilidad escribiendo a ${w.email}. Si considera que no se han atendido correctamente, puede reclamar ante la Agencia Española de Protección de Datos (www.aepd.es).`
     case 'cookies':
       return `## Qué cookies usamos
-Esta web solo utiliza cookies técnicas, necesarias para su funcionamiento: la cookie de sesión del portal documental, que se crea al iniciar sesión y permite mantenerla abierta de forma segura.
+Necesarias. La cookie cmc-consent recuerda durante un año si acepta o rechaza las demás. La cookie de sesión del portal se crea solo al iniciar sesión y mantiene el acceso de forma segura. Estas no requieren consentimiento (artículo 22.2 de la LSSI-CE).
 
-No usamos cookies de análisis, de publicidad ni de terceros, por lo que no es necesario su consentimiento (artículo 22.2 de la LSSI-CE).
+Análisis y publicidad. Hoy no se instala ninguna. Si más adelante se incorporan, permanecerán apagadas hasta que las acepte en el aviso, y podrá retirar ese consentimiento con la misma facilidad.
 
-## Cómo desactivarlas
+No cedemos datos de cookies a terceros.
+
+## Su elección
+La primera vez que entra aparece un aviso con tres opciones de igual visibilidad: rechazar, configurar o aceptar. Las casillas de análisis y publicidad no vienen marcadas. Puede cambiar la elección en cualquier momento desde «Configurar cookies», en el pie de cada página. La elección se conserva doce meses.
+
+## Cómo desactivarlas en el navegador
 Puede borrar o bloquear las cookies desde la configuración de su navegador. Si bloquea la cookie de sesión no podrá acceder al portal.
 
-## Cambios
-Si en el futuro se incorporan otras cookies, se actualizará esta política y se pedirá su consentimiento antes de instalarlas.`
+## Más información
+El tratamiento de los datos personales se describe en la política de privacidad. Puede reclamar ante la Agencia Española de Protección de Datos (www.aepd.es).`
   }
 }
 

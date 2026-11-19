@@ -1,4 +1,7 @@
+'use client'
+
 import Link from 'next/link'
+import { abrirCookies } from './web/AvisoCookies'
 import { MenuMovil } from './MenuMovil'
 import type { DatosWeb } from '@/lib/web'
 import { telefonoHref } from '@/lib/web'
@@ -70,6 +73,7 @@ export function SiteFooter({ web }: { web: DatosWeb }) {
             <Link href="/aviso-legal">Aviso legal</Link>
             <Link href="/privacidad">Privacidad</Link>
             <Link href="/cookies">Cookies</Link>
+            <button type="button" className="enlace-boton" onClick={abrirCookies}>Configurar cookies</button>
           </nav>
         </div>
       </div>
