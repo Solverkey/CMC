@@ -46,8 +46,8 @@ const db = /^postgres(ql)?:\/\//.test(databaseURL)
   ? postgresAdapter({
       pool: {
         connectionString: databaseURL,
-        // El pooler de Supabase en modo sesión admite pocas conexiones. Una por proceso basta.
-        max: 1,
+        // Payload reserva una conexión para siempre al arrancar. Con una sola, el resto de consultas esperan hasta el timeout.
+        max: 4,
         idleTimeoutMillis: 10000,
         connectionTimeoutMillis: 10000,
         allowExitOnIdle: true,
