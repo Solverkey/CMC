@@ -35,7 +35,7 @@ export function maquetar(cfg: Config, { asunto, cuerpo, boton, enlace, pixel }: 
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escaparHtml(asunto)}</title></head>
 <body style="margin:0;background:#f8f6ee;font:16px/24px Arial,Helvetica,sans-serif;color:#1e2a2b">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8f6ee;padding:24px 0"><tr><td align="center">
-<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border:1px solid #dcd7c3;border-radius:12px">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border:1px solid #dcd7c3;border-radius:16px">
 <tr><td style="padding:24px 32px;border-bottom:4px solid ${color}">${logo}</td></tr>
 <tr><td style="padding:32px">
 <h1 style="margin:0 0 16px;font:600 20px/28px Arial,sans-serif">${escaparHtml(asunto)}</h1>
@@ -43,7 +43,7 @@ ${parrafos(cuerpo)}
 ${enlace && boton ? `<p style="margin:24px 0"><a href="${escaparHtml(enlace)}" style="display:inline-block;background:${color};color:#ffffff;text-decoration:none;font-weight:600;padding:12px 24px;border-radius:8px">${escaparHtml(boton)}</a></p>` : ''}
 <p style="margin:24px 0 0;font-size:13px;line-height:18px;color:#56625f">Por seguridad, los documentos no se adjuntan: consúltelos en el portal.</p>
 </td></tr>
-<tr><td style="padding:16px 32px;background:#efece0;border-radius:0 0 12px 12px;font-size:13px;line-height:18px;color:#56625f">${parrafos(cfg.firma)}</td></tr>
+<tr><td style="padding:16px 32px;background:#efece0;border-radius:0 0 16px 16px;font-size:13px;line-height:18px;color:#56625f">${parrafos(cfg.firma)}</td></tr>
 </table></td></tr></table>${pixel ? `<img src="${pixel}" width="1" height="1" alt="" style="display:block">` : ''}
 </body></html>`
 }
