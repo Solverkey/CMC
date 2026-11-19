@@ -1,13 +1,14 @@
 import fs from 'fs'
 import path from 'path'
 import { Client } from 'pg'
+import { urlPostgres } from '@/lib/baseDatos'
 
 const PUBLICOS = 'https://adfunvjmuqjkscarwvlu.supabase.co/storage/v1/object/public/portada/'
 let cache: { en: number; urls: string[] } | null = null
 
 /** Vídeos del bucket público `portada` en Supabase. Si no responde, la portada sigue con el resto. */
 export async function videosRemotos(): Promise<string[]> {
-  const url = process.env.SUPABASE_DB_URL
+  const url = process.env.SUPABASE_DB_URL ? urlPostgres(process.env.SUPABASE_DB_URL) : ''
   if (!url) return []
   if (cache && Date.now() - cache.en < 30_000) return cache.urls
   const client = new Client({ connectionString: url, ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 2500 })

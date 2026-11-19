@@ -29,6 +29,7 @@ import { Configuracion } from './globals/Configuracion'
 import { Web } from './globals/Web'
 import { enviarCorreo } from './jobs/enviarCorreo'
 import { recalcularEstados, resumenSemanal } from './jobs/recalcularEstados'
+import { urlPostgres } from './lib/baseDatos'
 import { MAX_BYTES, configS3 } from './lib/ficheros'
 import { ajustarColeccionClaves, comprobarAcceso } from './mcp/claves'
 import { herramientas } from './mcp/herramientas'
@@ -38,7 +39,7 @@ const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
 
 const serverURL = (process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000').replace(/\/$/, '')
-const databaseURL = process.env.DATABASE_URL || 'file:./cmc.db'
+const databaseURL = urlPostgres(process.env.DATABASE_URL || 'file:./cmc.db')
 
 // Producción: Postgres en un servidor de la UE (DATABASE_URL=postgres://…). Local: SQLite en un fichero.
 const db = /^postgres(ql)?:\/\//.test(databaseURL)
@@ -48,6 +49,7 @@ const db = /^postgres(ql)?:\/\//.test(databaseURL)
         // El pooler de Supabase en modo sesión admite pocas conexiones. Una por proceso basta.
         max: 1,
         idleTimeoutMillis: 10000,
+        connectionTimeoutMillis: 10000,
         allowExitOnIdle: true,
         ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
       },

@@ -3,6 +3,9 @@ import React from 'react'
 import { Jost, Public_Sans } from 'next/font/google'
 import './styles.css'
 
+// La primera visita aplica las migraciones de Postgres. Con el tope por defecto Vercel corta la respuesta y la página sale en blanco.
+export const maxDuration = 60
+
 const jost = Jost({ subsets: ['latin'], weight: ['400', '500', '600'], variable: '--font-display' })
 const publicSans = Public_Sans({ subsets: ['latin'], weight: ['400', '600'], variable: '--font-sans' })
 
