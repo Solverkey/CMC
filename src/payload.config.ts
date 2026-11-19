@@ -47,8 +47,8 @@ const db = /^postgres(ql)?:\/\//.test(databaseURL)
       pool: {
         connectionString: databaseURL,
         // Payload reserva una conexión para siempre al arrancar. Con una sola, el resto de consultas esperan hasta el timeout.
-        max: 4,
-        idleTimeoutMillis: 10000,
+        max: 3,
+        idleTimeoutMillis: 5000,
         connectionTimeoutMillis: 10000,
         allowExitOnIdle: true,
         ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
