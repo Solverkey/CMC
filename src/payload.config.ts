@@ -55,7 +55,11 @@ const db = /^postgres(ql)?:\/\//.test(databaseURL)
       // En producción el esquema se crea y actualiza con las migraciones al arrancar.
       prodMigrations: migrations,
     })
-  : sqliteAdapter({ client: { url: databaseURL } })
+  : sqliteAdapter({
+      client: { url: databaseURL },
+      // El esquema local ya existe. Volver a empujarlo intenta crear índices que ya están y la página se queda en Rendering.
+      push: false,
+    })
 
 // Correo transaccional con remitente del dominio de CMC. Sin SMTP_HOST, los correos se muestran en consola.
 const email = process.env.SMTP_HOST
