@@ -109,7 +109,7 @@ async function Consolidado({ empresas, cmc, user, filtro, q }: { empresas: Empre
 
   const filas = empresas
     .map((e) => {
-      const c = conteo[String(e.id)] ?? { verde: 0, amarillo: 0, naranja: 0, rojo: 0, negro: 0 }
+      const c = conteo[String(e.id)] ?? { verde: 0, amarillo: 0, naranja: 0, rojo: 0, azul: 0, negro: 0 }
       const peor = peorEstado(VISIBLES.filter((k) => c[k] > 0))
       return { e, c, peor, envios: porEmpresa(pendientes?.docs, e.id), hilos: porEmpresa(abiertos?.docs, e.id) }
     })

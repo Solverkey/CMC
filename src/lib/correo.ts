@@ -1,3 +1,4 @@
+import { after } from 'next/server'
 import type { PayloadRequest } from 'payload'
 import { registrar } from './actividad'
 import { firmar } from './cifrado'
@@ -101,5 +102,17 @@ export async function programarCorreo(req: PayloadRequest, p: Programar) {
     await registrar(req, { accion: 'correo', descripcion: `Correo «${asunto}» programado para ${d.email}`, empresa: p.empresa, coleccion: 'correos', registroId: correo.id })
     ids.push(correo.id)
   }
+  if (ids.length && req.context.origen !== 'sistema') enviarAlResponder(req)
   return ids
+}
+
+/** Envía la cola en cuanto termina la petición. Las tareas programadas (origen «sistema») la vacían ellas mismas. */
+function enviarAlResponder(req: PayloadRequest) {
+  try {
+    after(async () => {
+      await req.payload.jobs.run({ queue: 'correo', limit: 50, silent: { info: true } })
+    })
+  } catch {
+    // Fuera de una petición (seed, scripts): lo envía la próxima ejecución de la cola.
+  }
 }

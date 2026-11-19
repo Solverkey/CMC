@@ -10,6 +10,7 @@ import { buildConfig } from 'payload'
 import sharp from 'sharp'
 import { fileURLToPath } from 'url'
 
+import { esSuperAdmin } from './access'
 import { Actividad } from './collections/Actividad'
 import { Archivos } from './collections/Archivos'
 import { Catalogo } from './collections/Catalogo'
@@ -68,7 +69,7 @@ const db = /^postgres(ql)?:\/\//.test(databaseURL)
   : sqliteAdapter({
       client: { url: databaseURL },
       // El esquema local ya existe. Volver a empujarlo intenta crear índices que ya están y la página se queda en Rendering.
-      push: false,
+      push: process.env.NODE_ENV === 'test',
     })
 
 // Correo transaccional con remitente del dominio de CMC. Sin SMTP_HOST, los correos se muestran en consola.
@@ -111,10 +112,15 @@ export default buildConfig({
   sharp,
   jobs: {
     tasks: [recalcularEstados, resumenSemanal, enviarCorreo],
-    autoRun: [
-      { cron: '* * * * *', queue: 'correo' },
-      { cron: '*/5 * * * *', queue: 'nocturna' },
-    ],
+    // En Vercel no hay proceso permanente: la cola la lanzan /api/cron y el envío al responder (lib/correo).
+    autoRun: process.env.VERCEL
+      ? undefined
+      : [
+          { cron: '* * * * *', queue: 'correo' },
+          { cron: '*/5 * * * *', queue: 'nocturna' },
+        ],
+    // La ruta /api/payload-jobs/run no puede usarla cualquier usuario con sesión.
+    access: { run: ({ req }) => esSuperAdmin(req.user), queue: ({ req }) => esSuperAdmin(req.user), cancel: ({ req }) => esSuperAdmin(req.user) },
     deleteJobOnComplete: false,
   },
   plugins: [
