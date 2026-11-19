@@ -14,8 +14,8 @@ export type CmcUser = {
 
 const idOf = (v: Membership['empresa']) => (typeof v === 'object' && v !== null ? v.id : v)
 
-/** El doble factor es obligatorio para super administradores salvo que se desactive expresamente (solo desarrollo). */
-export const dosFactorObligatorio = () => process.env.NODE_ENV === 'production' || process.env.CMC_2FA_SUPERADMIN !== 'opcional'
+/** El doble factor es obligatorio para super administradores salvo que CMC_2FA_SUPERADMIN=opcional (también en producción, de forma temporal). */
+export const dosFactorObligatorio = () => process.env.CMC_2FA_SUPERADMIN !== 'opcional'
 
 const usuarioValido = (user: unknown): user is CmcUser => {
   const u = user as CmcUser | null
