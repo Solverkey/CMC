@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { createLocalReq, getPayload, type PayloadRequest } from 'payload'
 import config from '@payload-config'
 import type { User } from '@/payload-types'
-import { esSuperAdmin } from '@/access'
+import { esSuperAdmin, superAdminSin2FA } from '@/access'
 
 export const payloadClient = () => getPayload({ config })
 
@@ -16,9 +16,13 @@ export async function requireUser(next?: string) {
   return { payload, user: user as User }
 }
 
-/** Sesión y una petición local con ese usuario, para usar los mismos servicios que la API y el servidor MCP. */
-export async function contexto(next?: string) {
+/**
+ * Sesión y una petición local con ese usuario, para usar los mismos servicios que la API y el servidor MCP.
+ * Un super administrador sin doble factor no tiene permisos: se le lleva a activarlo antes de consultar nada.
+ */
+export async function contexto(next?: string, { permitirSin2FA = false } = {}) {
   const { payload, user } = await requireUser(next)
+  if (!permitirSin2FA && next !== '/portal/seguridad' && superAdminSin2FA(user)) redirect('/portal/seguridad')
   const req = await createLocalReq({ user: { ...user, collection: 'users' } as never, req: { headers: new Headers(await nextHeaders()) } as Partial<PayloadRequest> }, payload)
   return { payload, user, req, cmc: esSuperAdmin(user) }
 }

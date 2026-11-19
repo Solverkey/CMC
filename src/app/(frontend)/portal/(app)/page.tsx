@@ -15,7 +15,7 @@ const VISIBLES: Estado[] = ['verde', 'amarillo', 'naranja', 'rojo', 'azul', 'neg
 
 export default async function PanelPage({ searchParams }: { searchParams: Promise<{ empresa?: string; plazo?: string; filtro?: string; q?: string }> }) {
   const sp = await searchParams
-  const { payload, user, cmc } = await contexto()
+  const { payload, user, cmc } = await contexto('/portal')
   const { empresas, empresa } = await empresasDelUsuario(user, sp.empresa)
   if (!empresa) return <p>No tiene ninguna empresa asignada. Contacte con CMC.</p>
   if (!sp.empresa && (cmc || empresas.length > 1)) return <Consolidado empresas={empresas} cmc={cmc} user={user} filtro={sp.filtro} q={sp.q} />

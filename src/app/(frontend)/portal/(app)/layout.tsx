@@ -6,15 +6,17 @@ import { contexto } from '@/lib/payload'
 import type { Empresa, Media } from '@/payload-types'
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
-  const { payload, user, cmc } = await contexto()
+  const { payload, user, cmc } = await contexto(undefined, { permitirSin2FA: true })
   const esAdmin = cmc || empresasDe(user, true).length > 0
   const rolTexto = user.rol === 'superadmin' ? 'CMC · Super administrador' : esAdmin ? 'Administrador de empresa' : 'Usuario de empresa'
   const obligar2FA = user.rol === 'superadmin' && dosFactorObligatorio() && !user.totpActivo
 
-  const [pendientes, sinLeer] = await Promise.all([
-    cmc ? payload.count({ collection: 'envios', where: { estado: { equals: 'pendiente' } }, overrideAccess: true }) : null,
-    payload.count({ collection: 'hilos', where: { estado: { equals: 'abierto' } }, user, overrideAccess: false }),
-  ])
+  const [pendientes, sinLeer] = obligar2FA
+    ? [null, null]
+    : await Promise.all([
+        cmc ? payload.count({ collection: 'envios', where: { estado: { equals: 'pendiente' } }, overrideAccess: true }) : null,
+        payload.count({ collection: 'hilos', where: { estado: { equals: 'abierto' } }, user, overrideAccess: false }),
+      ])
 
   // El logotipo de la empresa del cliente personaliza el portal (RF-22).
   const primera = !cmc && user.empresas?.[0] ? (user.empresas[0].empresa as Empresa) : null
@@ -24,7 +26,7 @@ export default async function PortalLayout({ children }: { children: React.React
     { href: '/portal', texto: cmc ? 'Panel de empresas' : 'Panel', icono: 'grid' },
     { href: '/portal/documentos', texto: 'Documentos', icono: 'search' },
     { href: '/portal/enviar', texto: cmc ? 'Bandeja de envíos' : 'Enviar a CMC', icono: 'upload', aviso: pendientes?.totalDocs },
-    { href: '/portal/mensajes', texto: 'Comunicación con CMC', icono: 'chat', aviso: sinLeer.totalDocs },
+    { href: '/portal/mensajes', texto: 'Comunicación con CMC', icono: 'chat', aviso: sinLeer?.totalDocs },
     { href: '/portal/avisos', texto: 'Avisos', icono: 'bell' },
     { href: '/portal/facturacion', texto: 'Facturación', icono: 'list' },
     ...(esAdmin ? ([{ href: '/portal/usuarios', texto: 'Usuarios', icono: 'users' }, { href: '/portal/actividad', texto: 'Registro de actividad', icono: 'list' }] as Enlace[]) : []),
