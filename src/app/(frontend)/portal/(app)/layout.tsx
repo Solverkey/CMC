@@ -30,7 +30,7 @@ export default async function PortalLayout({ children }: { children: React.React
     { href: '/portal/avisos', texto: 'Avisos', icono: 'bell' },
     { href: '/portal/facturacion', texto: 'Facturación', icono: 'list' },
     ...(esAdmin ? ([{ href: '/portal/usuarios', texto: 'Usuarios', icono: 'users' }, { href: '/portal/actividad', texto: 'Registro de actividad', icono: 'list' }] as Enlace[]) : []),
-    ...(cmc ? ([{ href: '/portal/almacenamiento', texto: 'Almacenamiento', icono: 'database' }, { href: '/admin', texto: 'Administración', icono: 'settings', externo: true }] as Enlace[]) : []),
+    ...(cmc ? ([{ href: '/portal/almacenamiento', texto: 'Almacenamiento', icono: 'database' }] as Enlace[]) : []),
     { href: '/portal/asistentes', texto: 'Asistentes de IA', icono: 'key' },
     { href: '/portal/seguridad', texto: 'Seguridad', icono: 'shield' },
   ]

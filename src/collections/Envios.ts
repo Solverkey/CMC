@@ -83,7 +83,7 @@ export const Envios: CollectionConfig = {
               plantilla: 'envio_recibido',
               para: [...(tecnico ? [{ email: tecnico.email, usuario: tecnico.id, tipo: 'cmc' as const }] : []), ...(await destinatariosCMC(req))],
               vars: { empresa: empresa.razonSocial, documento: doc.titulo, nombre: (req.user as unknown as User)?.nombre },
-              enlace: `${urlServidor()}/admin/collections/envios/${doc.id}`,
+              enlace: `${urlServidor()}/portal/enviar/${doc.id}`,
               empresa: empresa.id,
             })
           }

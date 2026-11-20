@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
 import { administraEmpresa } from '@/access'
 import { contexto, idDe } from '@/lib/payload'
 import { COLECCION_CLAVES, crearClave } from '@/mcp/claves'
@@ -83,6 +84,102 @@ export async function nuevaClave(_: Resultado, f: FormData): Promise<Resultado> 
     const r = await crearClave(req, { usuario: user.id, label: campo(f, 'nombre') || 'Asistente de IA', origen: 'manual', dias })
     return { ok: 'Clave creada. Cópiela ahora: no se volverá a mostrar.', clave: r.apiKey }
   })
+}
+
+const fecha = (f: FormData, k: string) => campo(f, k) || null
+const esRedireccion = (e: unknown) => typeof e === 'object' && e !== null && 'digest' in e && String((e as { digest: string }).digest).startsWith('NEXT_REDIRECT')
+
+async function comoCmc() {
+  const ctx = await contexto()
+  if (!ctx.cmc) throw new Error('Solo CMC puede hacer esto.')
+  return ctx
+}
+
+export async function altaEmpresa(_: Resultado, f: FormData): Promise<Resultado> {
+  try {
+    const { req } = await comoCmc()
+    const emails = campo(f, 'emails').split(/[,;\s]+/).filter(Boolean).map((email) => ({ email }))
+    const doc = await req.payload.create({
+      collection: 'empresas',
+      data: {
+        razonSocial: campo(f, 'razonSocial'),
+        cif: campo(f, 'cif'),
+        direccion: campo(f, 'direccion') || undefined,
+        sector: campo(f, 'sector') || undefined,
+        contacto: campo(f, 'contacto') || undefined,
+        emailsAviso: emails,
+        gestion: (campo(f, 'gestion') || undefined) as 'gestionado' | 'no_gestionado' | undefined,
+        adminEmail: campo(f, 'adminEmail'),
+        adminNombre: campo(f, 'adminNombre') || undefined,
+        aplicarPlantilla: f.get('aplicarPlantilla') === 'on',
+      } as never,
+      user: req.user,
+      overrideAccess: false,
+      req,
+    })
+    revalidatePath('/portal')
+    redirect(`/portal?empresa=${doc.id}`)
+  } catch (e) {
+    if (esRedireccion(e)) throw e
+    return { error: (e as Error).message || 'No se ha podido crear la empresa.' }
+  }
+}
+
+export async function guardarDocumento(_: Resultado, f: FormData): Promise<Resultado> {
+  try {
+    const { req } = await comoCmc()
+    const id = campo(f, 'id')
+    const data = {
+      titulo: campo(f, 'titulo'),
+      empresa: Number(campo(f, 'empresa')),
+      categoria: Number(campo(f, 'categoria')),
+      referencia: campo(f, 'referencia') || null,
+      organismo: campo(f, 'organismo') || null,
+      fechaEmision: fecha(f, 'fechaEmision'),
+      fechaCaducidad: fecha(f, 'fechaCaducidad'),
+      fechaAviso: fecha(f, 'fechaAviso'),
+      estadoManual: (campo(f, 'estadoManual') || null) as 'naranja' | 'rojo' | 'azul' | 'negro' | null,
+      motivoEstado: campo(f, 'motivoEstado') || null,
+      limiteSubsanacion: fecha(f, 'limiteSubsanacion'),
+      gestion: (campo(f, 'gestion') || null) as 'gestionado' | 'no_gestionado' | null,
+      observaciones: campo(f, 'observaciones') || null,
+    }
+    const doc = id
+      ? await req.payload.update({ collection: 'documentos', id, data, user: req.user, overrideAccess: false, req })
+      : await req.payload.create({ collection: 'documentos', data, user: req.user, overrideAccess: false, req })
+    revalidatePath('/portal')
+    revalidatePath(`/portal/documentos/${doc.id}`)
+    redirect(`/portal/documentos/${doc.id}`)
+  } catch (e) {
+    if (esRedireccion(e)) throw e
+    return { error: (e as Error).message || 'No se ha podido guardar el documento.' }
+  }
+}
+
+export async function resolverEnvio(_: Resultado, f: FormData): Promise<Resultado> {
+  try {
+    const { req } = await comoCmc()
+    const id = campo(f, 'id')
+    const decision = campo(f, 'decision')
+    const data = decision === 'rechazado'
+      ? { estado: 'rechazado' as const, motivoRechazo: campo(f, 'motivoRechazo') }
+      : {
+          estado: 'publicado' as const,
+          documentoDestino: campo(f, 'documentoDestino') ? Number(campo(f, 'documentoDestino')) : null,
+          categoriaDestino: campo(f, 'categoriaDestino') ? Number(campo(f, 'categoriaDestino')) : null,
+          tituloFinal: campo(f, 'tituloFinal') || null,
+          relacionFinal: campo(f, 'relacionFinal') || null,
+          fechaEmision: fecha(f, 'fechaEmision'),
+          fechaCaducidad: fecha(f, 'fechaCaducidad'),
+          fechaAviso: fecha(f, 'fechaAviso'),
+        }
+    await req.payload.update({ collection: 'envios', id, data, user: req.user, overrideAccess: false, req })
+    revalidatePath('/portal/enviar')
+    redirect('/portal/enviar')
+  } catch (e) {
+    if (esRedireccion(e)) throw e
+    return { error: (e as Error).message || 'No se ha podido resolver el envío.' }
+  }
 }
 
 export async function revocarClave(_: Resultado, f: FormData): Promise<Resultado> {

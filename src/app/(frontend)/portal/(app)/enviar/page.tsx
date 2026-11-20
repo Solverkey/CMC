@@ -91,7 +91,7 @@ export default async function EnviarPage({ searchParams }: { searchParams: Promi
                       </span>
                     </td>
                     <td><span className={`status status--${ESTADO_ENVIO[e.estado ?? 'pendiente']}`}>{LABEL_ENVIO[e.estado ?? 'pendiente']}</span></td>
-                    {cmc && <td>{e.estado === 'pendiente' && <a className="btn btn--primary btn--sm" href={`/admin/collections/envios/${e.id}`}>Revisar</a>}</td>}
+                    {cmc && <td>{e.estado === 'pendiente' && <Link className="btn btn--primary btn--sm" href={`/portal/enviar/${e.id}`}>Revisar</Link>}</td>}
                   </tr>
                 )
               })}

@@ -48,7 +48,7 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
           <a href={`/api/inventario/${empresa.id}?formato=xlsx`} className="btn btn--secondary btn--sm"><Icon name="download" />Inventario Excel</a>
           <a href={`/api/inventario/${empresa.id}?formato=pdf`} className="btn btn--secondary btn--sm"><Icon name="download" />Inventario PDF</a>
           {cmc ? (
-            <a href={`/admin/collections/documentos/create`} className="btn btn--primary"><Icon name="file" />Nuevo documento</a>
+            <Link href={`/portal/documentos/nuevo?empresa=${empresa.id}`} className="btn btn--primary"><Icon name="file" />Nuevo documento</Link>
           ) : (
             <Link href={`/portal/enviar?empresa=${empresa.id}`} className="btn btn--primary"><Icon name="upload" />Enviar documento</Link>
           )}
@@ -136,7 +136,7 @@ async function Consolidado({ empresas, cmc, user, filtro, q }: { empresas: Empre
           <p className="small muted">{cmc ? 'CMC' : `${empresas.length} empresas`}</p>
           <h1>{cmc ? 'Panel de empresas' : 'Vista consolidada'}</h1>
         </div>
-        {cmc && <a href="/admin/collections/empresas/create" className="btn btn--primary"><Icon name="building" />Alta de empresa</a>}
+        {cmc && <Link href="/portal/empresas/nueva" className="btn btn--primary"><Icon name="building" />Alta de empresa</Link>}
       </div>
 
       <section aria-label="Resumen" className="kpis">
