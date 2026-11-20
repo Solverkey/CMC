@@ -87,7 +87,7 @@ export const registrarDescarga = async (req: PayloadRequest, { doc, params }: { 
   if (!req.user) return
   try {
     // CMC tiene acceso total: Payload no adjunta el registro y, si se usa vacío, la descarga falla.
-    let registro = doc as (TypeWithID & { empresa?: unknown; filename?: string }) | undefined
+    let registro = doc as (TypeWithID & { empresa?: unknown; filename?: string | null }) | undefined
     if (!registro) {
       const hallado = await req.payload.find({
         collection: params.collection as 'archivos',
