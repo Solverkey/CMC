@@ -5,9 +5,16 @@ import { redirect } from 'next/navigation'
 import { administraEmpresa } from '@/access'
 import { contexto, idDe } from '@/lib/payload'
 import { restarMeses } from '@/lib/estado'
-import { COLECCION_CLAVES, crearClave } from '@/mcp/claves'
-import type { User } from '@/payload-types'
+import { PLANTILLAS, type ClavePlantilla } from '@/lib/plantillas'
+import { guardarConfiguracion as persistirConfig } from '@/lib/configuracion'
+import { crearClave, revocarClave as borrarClave } from '@/mcp/claves'
 import { cambiarRol, enviarInvitacion, invitarUsuario, quitarAcceso } from '@/servicios/usuarios'
+import { usuarioPorId } from '@/datos/usuarios'
+import { empresaPorId } from '@/datos/consultas'
+import { actualizarCategoria, actualizarDocumento, actualizarEmpresa, crearEmpresa, crearMedia, resolverEnvio as publicarEnvio } from '@/datos/operaciones'
+import { crearCatalogo, desactivarCatalogo } from '@/lib/catalogo'
+import { gestionarHilo as actualizarHilo } from '@/servicios/comunicacion'
+import type { Fichero } from '@/lib/subidas'
 
 export type Resultado = { ok?: string; error?: string; clave?: string } | null
 
@@ -22,6 +29,14 @@ const ejecutar = async (ruta: string, fn: () => Promise<string | Resultado>): Pr
 }
 
 const campo = (f: FormData, k: string) => String(f.get(k) ?? '').trim()
+const fecha = (f: FormData, k: string) => campo(f, k) || null
+const esRedireccion = (e: unknown) => typeof e === 'object' && e !== null && 'digest' in e && String((e as { digest: string }).digest).startsWith('NEXT_REDIRECT')
+
+async function comoCmc() {
+  const ctx = await contexto()
+  if (!ctx.cmc) throw new Error('Solo CMC puede hacer esto.')
+  return ctx
+}
 
 export async function invitar(_: Resultado, f: FormData): Promise<Resultado> {
   const { req } = await contexto()
@@ -52,9 +67,9 @@ export async function reenviar(_: Resultado, f: FormData): Promise<Resultado> {
   return ejecutar('/portal/usuarios', async () => {
     const empresa = campo(f, 'empresa')
     if (!administraEmpresa(req.user, empresa)) throw new Error('No administra esta empresa.')
-    const u = (await req.payload.findByID({ collection: 'users', id: campo(f, 'usuario'), depth: 0, overrideAccess: true, req })) as User
-    if (!(u.empresas ?? []).some((m) => idDe(m.empresa) === empresa)) throw new Error('Ese usuario no pertenece a la empresa.')
-    const emp = await req.payload.findByID({ collection: 'empresas', id: empresa, depth: 0, overrideAccess: true, req })
+    const u = await usuarioPorId(campo(f, 'usuario'))
+    if (!u || !(u.empresas ?? []).some((m) => idDe(m.empresa) === empresa)) throw new Error('Ese usuario no pertenece a la empresa.')
+    const emp = await empresaPorId(empresa)
     await enviarInvitacion(req, u, emp)
     return `Invitación reenviada a ${u.email}.`
   })
@@ -66,13 +81,9 @@ export async function gestionarHilo(_: Resultado, f: FormData): Promise<Resultad
   return ejecutar(`/portal/mensajes/${id}`, async () => {
     const estado = campo(f, 'estado')
     const asignado = campo(f, 'asignado')
-    await req.payload.update({
-      collection: 'hilos',
-      id,
-      data: { ...(estado ? { estado: estado as 'abierto' | 'resuelto' } : {}), ...(f.has('asignado') ? { asignado: asignado ? Number(asignado) : null } : {}) },
-      user: req.user,
-      overrideAccess: false,
-      req,
+    await actualizarHilo(req, id, {
+      ...(estado ? { estado: estado as 'abierto' | 'resuelto' } : {}),
+      ...(f.has('asignado') ? { asignado: asignado ? Number(asignado) : null } : {}),
     })
     return 'Conversación actualizada.'
   })
@@ -87,37 +98,22 @@ export async function nuevaClave(_: Resultado, f: FormData): Promise<Resultado> 
   })
 }
 
-const fecha = (f: FormData, k: string) => campo(f, k) || null
-const esRedireccion = (e: unknown) => typeof e === 'object' && e !== null && 'digest' in e && String((e as { digest: string }).digest).startsWith('NEXT_REDIRECT')
-
-async function comoCmc() {
-  const ctx = await contexto()
-  if (!ctx.cmc) throw new Error('Solo CMC puede hacer esto.')
-  return ctx
-}
-
 export async function altaEmpresa(_: Resultado, f: FormData): Promise<Resultado> {
   try {
     const { req } = await comoCmc()
     const emails = campo(f, 'emails').split(/[,;\s]+/).filter(Boolean).map((email) => ({ email }))
     const razon = campo(f, 'razonSocial')
-    await req.payload.create({
-      collection: 'empresas',
-      data: {
-        razonSocial: razon,
-        cif: campo(f, 'cif'),
-        direccion: campo(f, 'direccion') || undefined,
-        sector: campo(f, 'sector') || undefined,
-        contacto: campo(f, 'contacto') || undefined,
-        emailsAviso: emails,
-        gestion: (campo(f, 'gestion') || undefined) as 'gestionado' | 'no_gestionado' | undefined,
-        adminEmail: campo(f, 'adminEmail'),
-        adminNombre: campo(f, 'adminNombre') || undefined,
-        aplicarPlantilla: f.get('aplicarPlantilla') === 'on',
-      } as never,
-      user: req.user,
-      overrideAccess: false,
-      req,
+    await crearEmpresa(req, {
+      razonSocial: razon,
+      cif: campo(f, 'cif'),
+      direccion: campo(f, 'direccion') || undefined,
+      sector: campo(f, 'sector') || undefined,
+      contacto: campo(f, 'contacto') || undefined,
+      emailsAviso: emails,
+      gestion: (campo(f, 'gestion') || undefined) as 'gestionado' | 'no_gestionado' | undefined,
+      adminEmail: campo(f, 'adminEmail'),
+      adminNombre: campo(f, 'adminNombre') || undefined,
+      aplicarPlantilla: f.get('aplicarPlantilla') === 'on',
     })
     revalidatePath('/portal')
     return { ok: `Empresa «${razon}» creada.` }
@@ -131,14 +127,7 @@ export async function guardarAvisoEmpresa(_: Resultado, f: FormData): Promise<Re
   return ejecutar('/portal', async () => {
     const { req } = await comoCmc()
     const meses = campo(f, 'antelacionMeses')
-    await req.payload.update({
-      collection: 'empresas',
-      id: campo(f, 'empresa'),
-      data: { antelacionMeses: meses === '' ? null : Number(meses) },
-      user: req.user,
-      overrideAccess: false,
-      req,
-    })
+    await actualizarEmpresa(req, campo(f, 'empresa'), { antelacionMeses: meses === '' ? null : Number(meses) })
     return 'Aviso estándar del cliente actualizado.'
   })
 }
@@ -147,14 +136,7 @@ export async function guardarAntelacionCategoria(_: Resultado, f: FormData): Pro
   return ejecutar('/portal', async () => {
     const { req } = await comoCmc()
     const meses = campo(f, 'antelacionMeses')
-    await req.payload.update({
-      collection: 'categorias',
-      id: campo(f, 'categoria'),
-      data: { antelacionMeses: meses === '' ? null : Number(meses) },
-      user: req.user,
-      overrideAccess: false,
-      req,
-    })
+    await actualizarCategoria(req, campo(f, 'categoria'), { antelacionMeses: meses === '' ? null : Number(meses) })
     return 'Antelación de la instalación actualizada.'
   })
 }
@@ -164,13 +146,7 @@ export async function crearSelector(_: Resultado, f: FormData): Promise<Resultad
     const { req } = await comoCmc()
     const tipo = campo(f, 'tipo')
     if (!['categoria', 'documento', 'relacion'].includes(tipo)) throw new Error('Tipo no válido.')
-    await req.payload.create({
-      collection: 'catalogo',
-      data: { tipo: tipo as 'categoria' | 'documento' | 'relacion', nombre: campo(f, 'nombre'), activo: true },
-      user: req.user,
-      overrideAccess: false,
-      req,
-    })
+    await crearCatalogo(req, tipo as 'categoria' | 'documento' | 'relacion', campo(f, 'nombre'))
     return 'Opción añadida.'
   })
 }
@@ -178,7 +154,7 @@ export async function crearSelector(_: Resultado, f: FormData): Promise<Resultad
 export async function quitarSelector(_: Resultado, f: FormData): Promise<Resultado> {
   return ejecutar('/portal/selectores', async () => {
     const { req } = await comoCmc()
-    await req.payload.update({ collection: 'catalogo', id: campo(f, 'id'), data: { activo: false }, user: req.user, overrideAccess: false, req })
+    await desactivarCatalogo(req, campo(f, 'id'))
     return 'Opción quitada del selector.'
   })
 }
@@ -187,6 +163,7 @@ export async function guardarDocumento(_: Resultado, f: FormData): Promise<Resul
   try {
     const { req } = await comoCmc()
     const id = campo(f, 'id')
+    if (!id) return { error: 'El documento entra al subir el archivo, no se crea vacío.' }
     const data = {
       titulo: campo(f, 'titulo'),
       empresa: Number(campo(f, 'empresa')),
@@ -203,13 +180,8 @@ export async function guardarDocumento(_: Resultado, f: FormData): Promise<Resul
       observaciones: campo(f, 'observaciones') || null,
     }
     const meses = campo(f, 'antelacionMeses')
-    if (meses !== '' && data.fechaCaducidad) {
-      data.fechaAviso = restarMeses(new Date(data.fechaCaducidad), Number(meses)).toISOString()
-    }
-    const doc = id
-      ? await req.payload.update({ collection: 'documentos', id, data, user: req.user, overrideAccess: false, req })
-      : null
-    if (!doc) return { error: 'El documento entra al subir el archivo, no se crea vacío.' }
+    if (meses !== '' && data.fechaCaducidad) data.fechaAviso = restarMeses(new Date(data.fechaCaducidad), Number(meses)).toISOString()
+    const doc = await actualizarDocumento(req, id, data)
     revalidatePath('/portal')
     revalidatePath(`/portal/documentos/${doc.id}`)
     return { ok: 'Documento actualizado.' }
@@ -222,21 +194,23 @@ export async function guardarDocumento(_: Resultado, f: FormData): Promise<Resul
 export async function resolverEnvio(_: Resultado, f: FormData): Promise<Resultado> {
   try {
     const { req } = await comoCmc()
-    const id = campo(f, 'id')
     const decision = campo(f, 'decision')
-    const data = decision === 'rechazado'
-      ? { estado: 'rechazado' as const, motivoRechazo: campo(f, 'motivoRechazo') }
-      : {
-          estado: 'publicado' as const,
-          documentoDestino: campo(f, 'documentoDestino') ? Number(campo(f, 'documentoDestino')) : null,
-          categoriaDestino: campo(f, 'categoriaDestino') ? Number(campo(f, 'categoriaDestino')) : null,
-          tituloFinal: campo(f, 'tituloFinal') || null,
-          relacionFinal: campo(f, 'relacionFinal') || null,
-          fechaEmision: fecha(f, 'fechaEmision'),
-          fechaCaducidad: fecha(f, 'fechaCaducidad'),
-          fechaAviso: fecha(f, 'fechaAviso'),
-        }
-    await req.payload.update({ collection: 'envios', id, data, user: req.user, overrideAccess: false, req })
+    await publicarEnvio(
+      req,
+      campo(f, 'id'),
+      decision === 'rechazado'
+        ? { estado: 'rechazado', motivoRechazo: campo(f, 'motivoRechazo') }
+        : {
+            estado: 'publicado',
+            documentoDestino: campo(f, 'documentoDestino') ? Number(campo(f, 'documentoDestino')) : null,
+            categoriaDestino: campo(f, 'categoriaDestino') ? Number(campo(f, 'categoriaDestino')) : null,
+            tituloFinal: campo(f, 'tituloFinal') || null,
+            relacionFinal: campo(f, 'relacionFinal') || null,
+            fechaEmision: fecha(f, 'fechaEmision'),
+            fechaCaducidad: fecha(f, 'fechaCaducidad'),
+            fechaAviso: fecha(f, 'fechaAviso'),
+          },
+    )
     revalidatePath('/portal/enviar')
     redirect('/portal/enviar')
   } catch (e) {
@@ -245,10 +219,83 @@ export async function resolverEnvio(_: Resultado, f: FormData): Promise<Resultad
   }
 }
 
+const entero = (f: FormData, k: string, min: number, max: number, etiqueta: string) => {
+  const raw = campo(f, k)
+  const n = Number(raw)
+  if (raw === '' || !Number.isFinite(n) || n < min || n > max) throw new Error(`${etiqueta}: un número entre ${min} y ${max}.`)
+  return n
+}
+
+const correoOpcional = (f: FormData, k: string, etiqueta: string) => {
+  const v = campo(f, k)
+  if (v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) throw new Error(`${etiqueta} no es un correo válido.`)
+  return v || null
+}
+
+export async function guardarConfiguracion(_: Resultado, f: FormData): Promise<Resultado> {
+  return ejecutar('/portal/configuracion', async () => {
+    const { req } = await comoCmc()
+    const frecuencia = campo(f, 'frecuenciaCaducado')
+    if (frecuencia !== 'semanal' && frecuencia !== 'mensual') throw new Error('Elija cada cuánto recordar un documento caducado.')
+    const color = campo(f, 'colorPrimario')
+    if (!/^#[0-9a-f]{3,8}$/i.test(color)) throw new Error('El color tiene que ser hexadecimal, por ejemplo #4d6162.')
+    const nombres = f.getAll('catNombre').map((v) => String(v).trim())
+    const meses = f.getAll('catMeses').map((v) => String(v).trim())
+    const gestiones = f.getAll('catGestion').map((v) => String(v))
+    const descripciones = f.getAll('catDescripcion').map((v) => String(v).trim())
+    if (!nombres.length) throw new Error('Añada al menos una categoría a la plantilla de alta.')
+    const plantillaCategorias = nombres.map((nombre, i) => {
+      if (!nombre) throw new Error('Cada categoría de la plantilla necesita un nombre.')
+      const g = gestiones[i] ?? ''
+      if (g && g !== 'gestionado' && g !== 'no_gestionado') throw new Error(`Modalidad no válida en «${nombre}».`)
+      let antelacionMeses: number | null = null
+      if (meses[i]) {
+        const n = Number(meses[i])
+        if (!Number.isFinite(n) || n < 0 || n > 120) throw new Error(`Antelación de «${nombre}»: entre 0 y 120 meses.`)
+        antelacionMeses = n
+      }
+      return { nombre, antelacionMeses, gestion: (g || null) as 'gestionado' | 'no_gestionado' | null, descripcion: descripciones[i] || null }
+    })
+    const plantillas: Record<string, { asunto: string; cuerpo: string; boton: string | null }> = {}
+    for (const clave of Object.keys(PLANTILLAS) as ClavePlantilla[]) {
+      const base = PLANTILLAS[clave]
+      plantillas[clave] = { asunto: campo(f, `p_${clave}_asunto`) || base.asunto, cuerpo: campo(f, `p_${clave}_cuerpo`) || base.cuerpo, boton: campo(f, `p_${clave}_boton`) || base.boton || null }
+    }
+    let logo: number | null
+    const archivo = f.get('logo')
+    if (archivo instanceof File && archivo.size > 0) {
+      if (!archivo.type.startsWith('image/')) throw new Error('El logotipo tiene que ser una imagen.')
+      const fichero: Fichero = { data: Buffer.from(await archivo.arrayBuffer()), mimetype: archivo.type, name: archivo.name, size: archivo.size }
+      logo = await crearMedia(req, 'Logotipo de CMC', fichero)
+    } else if (f.get('quitarLogo') === 'on') logo = null
+    else logo = campo(f, 'logoId') ? Number(campo(f, 'logoId')) : null
+    await persistirConfig({
+      antelacionMeses: entero(f, 'antelacionMeses', 0, 120, 'Antelación de aviso'),
+      recordatorioDiasAntes: entero(f, 'recordatorioDiasAntes', 0, 365, 'Recordatorio previo'),
+      frecuenciaCaducado: frecuencia,
+      maxRecordatoriosCaducado: entero(f, 'maxRecordatoriosCaducado', 0, 100, 'Máximo de recordatorios'),
+      remitenteNombre: campo(f, 'remitenteNombre') || 'CMC · Portal documental',
+      remitenteEmail: correoOpcional(f, 'remitenteEmail', 'Dirección del remitente'),
+      responderA: correoOpcional(f, 'responderA', 'Dirección de respuesta'),
+      logo,
+      colorPrimario: color,
+      firma: campo(f, 'firma') || 'CMC · Consultoría de calidad y medio ambiente',
+      plantillas,
+      ladoMaximo: entero(f, 'ladoMaximo', 500, 8000, 'Tamaño de imagen'),
+      calidad: entero(f, 'calidad', 40, 100, 'Calidad de imagen'),
+      conservarOriginal: f.get('conservarOriginal') === 'on',
+      plantillaCategorias,
+    })
+    revalidatePath('/portal')
+    revalidatePath('/portal/almacenamiento')
+    return 'Configuración guardada.'
+  })
+}
+
 export async function revocarClave(_: Resultado, f: FormData): Promise<Resultado> {
   const { req } = await contexto()
   return ejecutar('/portal/asistentes', async () => {
-    await req.payload.delete({ collection: COLECCION_CLAVES as 'payload-mcp-api-keys', id: campo(f, 'id'), user: req.user, overrideAccess: false, req })
+    await borrarClave(req, campo(f, 'id'))
     return 'Acceso revocado.'
   })
 }

@@ -4,7 +4,8 @@ import Link from 'next/link'
 import { abrirCookies } from './web/AvisoCookies'
 import { MenuMovil } from './MenuMovil'
 import type { DatosWeb } from '@/lib/web'
-import { telefonoHref } from '@/lib/web'
+
+const telefonoHref = (t: string) => `tel:+34${t.replace(/\D/g, '')}`
 
 const enlaces = [
   { href: '/servicios', texto: 'Servicios' },

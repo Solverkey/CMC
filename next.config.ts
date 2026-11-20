@@ -1,4 +1,3 @@
-import { withPayload } from '@payloadcms/next/withPayload'
 import type { NextConfig } from 'next'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -27,6 +26,7 @@ const nextConfig: NextConfig = {
     root: path.resolve(dirname),
   },
   poweredByHeader: false,
+  serverExternalPackages: ['postgres', 'nodemailer', 'sharp', '@aws-sdk/client-s3', '@aws-sdk/s3-request-presigner'],
   async headers() {
     return [
       {
@@ -48,4 +48,4 @@ const nextConfig: NextConfig = {
   },
 }
 
-export default withPayload(nextConfig, { devBundleServerPackages: false })
+export default nextConfig

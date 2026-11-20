@@ -1,15 +1,16 @@
 'use server'
 
 import { headers } from 'next/headers'
-import { createLocalReq, type PayloadRequest } from 'payload'
 import { z } from 'zod'
 import { registrar } from '@/lib/actividad'
 import { leerTokenFormulario } from '@/lib/consultas'
 import { programarCorreo } from '@/lib/correo'
 import { urlServidor } from '@/lib/configuracion'
 import { destinatariosCMC } from '@/lib/destinatarios'
-import { payloadClient } from '@/lib/payload'
+import { contar } from '@/datos/consultas'
+import { ahora, bit, ejecutar } from '@/lib/db'
 import { leerWeb } from '@/lib/web'
+import type { Ctx } from '@/lib/ctx'
 
 export type EstadoConsulta = { ok?: boolean; error?: string; errores?: Record<string, string>; valores?: Record<string, string> } | null
 
@@ -49,30 +50,27 @@ export async function enviarConsulta(_: EstadoConsulta, f: FormData): Promise<Es
   }
   const d = datos.data
 
-  const payload = await payloadClient()
   const h = await headers()
-  const req = await createLocalReq({ req: { headers: new Headers(h) } as Partial<PayloadRequest> }, payload)
+  const req: Ctx = { user: null, headers: h, origen: 'web', context: {} }
   const ip = h.get('x-forwarded-for')?.split(',')[0]?.trim() || h.get('x-real-ip') || 'desconocida'
 
   const haceUnaHora = new Date(Date.now() - 60 * 60 * 1000).toISOString()
-  const recientes = await payload.count({ collection: 'consultas', where: { and: [{ ip: { equals: ip } }, { createdAt: { greater_than: haceUnaHora } }] }, overrideAccess: true })
-  if (recientes.totalDocs >= MAX_POR_HORA) return { error: 'Hemos recibido varias consultas desde su conexión. Inténtelo más tarde o escríbanos por correo electrónico.', valores }
+  const recientes = await contar('consultas', 'ip = $1 AND created_at > $2', [ip, haceUnaHora])
+  if (recientes >= MAX_POR_HORA) return { error: 'Hemos recibido varias consultas desde su conexión. Inténtelo más tarde o escríbanos por correo electrónico.', valores }
 
-  const consulta = await payload.create({
-    collection: 'consultas',
-    overrideAccess: true,
-    req,
-    data: { nombre: d.nombre, empresa: d.empresa, email: d.email, telefono: d.telefono, servicio: d.servicio, mensaje: d.mensaje, aceptaPrivacidad: true, ip, estado: 'nueva' },
-  })
-  await registrar(req, { accion: 'consulta', descripcion: `Consulta desde la web de ${d.nombre}${d.empresa ? ` (${d.empresa})` : ''}`, coleccion: 'consultas', registroId: consulta.id })
+  await ejecutar(
+    `INSERT INTO consultas (nombre, empresa, email, telefono, servicio, mensaje, acepta_privacidad, ip, estado, updated_at, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'nueva',$9,$9)`,
+    [d.nombre, d.empresa || null, d.email, d.telefono || null, d.servicio || null, d.mensaje, bit(true), ip, ahora()],
+  )
+  await registrar(req, { accion: 'consulta', descripcion: `Consulta desde la web de ${d.nombre}${d.empresa ? ` (${d.empresa})` : ''}`, coleccion: 'consultas' })
 
-  const web = await leerWeb(payload)
+  const web = await leerWeb()
   const para = web.emailsConsultas.length ? web.emailsConsultas.map((email) => ({ email, tipo: 'cmc' as const })) : await destinatariosCMC(req)
   await programarCorreo(req, {
     plantilla: 'consulta_web',
     para,
     vars: { nombre: d.nombre, empresa: d.empresa || 'sin empresa', email: d.email, telefono: d.telefono || '—', servicio: d.servicio || '—', mensaje: d.mensaje },
-    enlace: `${urlServidor()}/admin/collections/consultas/${consulta.id}`,
+    enlace: `${urlServidor()}/contacto`,
     responderA: d.email,
   })
 

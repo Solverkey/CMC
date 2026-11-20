@@ -1,6 +1,5 @@
-import type { Access, PayloadRequest, Where } from 'payload'
-
 type Membership = { empresa: number | string | { id: number | string }; rol: 'admin' | 'usuario' }
+type Req = { user?: unknown }
 export type CmcUser = {
   id: number | string
   collection?: string
@@ -26,7 +25,7 @@ const usuarioValido = (user: unknown): user is CmcUser => {
 export const esSuperAdmin = (user: unknown): boolean =>
   usuarioValido(user) && user.rol === 'superadmin' && (!dosFactorObligatorio() || user.totpActivo === true)
 
-export const isSuperAdmin = (req: PayloadRequest): boolean => esSuperAdmin(req.user)
+export const isSuperAdmin = (req: Req): boolean => esSuperAdmin(req.user)
 
 export const superAdminSin2FA = (user: unknown): boolean =>
   usuarioValido(user) && user.rol === 'superadmin' && dosFactorObligatorio() && user.totpActivo !== true
@@ -46,21 +45,21 @@ export const rolEn = (user: unknown, empresa: number | string): 'admin' | 'usuar
 export const puedeVerEmpresa = (user: unknown, empresa: number | string) => esSuperAdmin(user) || rolEn(user, empresa) !== null
 export const administraEmpresa = (user: unknown, empresa: number | string) => esSuperAdmin(user) || rolEn(user, empresa) === 'admin'
 
-export const soloSuperAdmin: Access = ({ req }) => isSuperAdmin(req)
-export const nadie: Access = () => false
+export const soloSuperAdmin = ({ req }: { req: Req }) => isSuperAdmin(req)
+export const nadie = () => false
 
 /**
  * Super admin: todo. Cliente: solo registros cuya `empresa` está entre las suyas y sigue activa.
  * El filtro se aplica en el servidor, en cualquier canal (portal, API o MCP).
  */
 export const porEmpresa =
-  (campo = 'empresa', soloAdmin = false): Access =>
-  ({ req }) => {
+  (campo = 'empresa', soloAdmin = false) =>
+  ({ req }: { req: Req }) => {
     if (!req.user) return false
     if (isSuperAdmin(req)) return true
     const ids = empresasDe(req.user, soloAdmin)
     if (!ids.length) return false
-    return { and: [{ [campo]: { in: ids } }, { [`${campo}.activa`]: { equals: true } }] } as Where
+    return { and: [{ [campo]: { in: ids } }, { [`${campo}.activa`]: { equals: true } }] }
   }
 
-export const autenticado: Access = ({ req }) => usuarioValido(req.user)
+export const autenticado = ({ req }: { req: Req }) => usuarioValido(req.user)

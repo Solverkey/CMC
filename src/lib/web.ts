@@ -1,5 +1,6 @@
-import type { Payload } from 'payload'
-import type { Media, Servicio, Trabajo } from '@/payload-types'
+import type { Media, Servicio, Trabajo } from '@/datos/tipos'
+import { bool, filas, uno } from '@/lib/db'
+import { urlDe } from '@/lib/ficheros'
 
 export const AREAS = [
   { value: 'calidad', label: 'Calidad', titulo: 'Calidad y excelencia', texto: 'Sistemas de gestión que ordenan su organización y le preparan para la certificación.' },
@@ -52,39 +53,84 @@ export const WEB_POR_DEFECTO: DatosWeb = {
 
 const texto = (v: unknown, d: string) => (typeof v === 'string' && v.trim() ? v : d)
 
-/** Contenido editable de la web (Administración → Web) con los valores por defecto para lo que no se haya guardado. */
-export async function leerWeb(payload: Payload): Promise<DatosWeb> {
-  const g = (await payload.findGlobal({ slug: 'web', depth: 1, overrideAccess: true }).catch(() => ({}))) as Record<string, any>
+/** Contenido editable de la web, con los valores por defecto para lo que no se haya guardado. */
+export async function leerWeb(): Promise<DatosWeb> {
+  const g = await uno<Record<string, unknown>>('SELECT * FROM web ORDER BY id LIMIT 1')
   const d = WEB_POR_DEFECTO
-  const p = g.portada ?? {}
-  const l = g.legal ?? {}
+  if (!g) return d
+  const id = Number(g.id)
+  const [profesionales, sedes, emails, videos] = await Promise.all([
+    filas<{ titulo: string; texto: string }>('SELECT titulo, texto FROM web_profesionales WHERE _parent_id = $1 ORDER BY _order', [id]),
+    filas<{ ciudad: string; telefono: string; direccion: string; codigo_postal: string }>('SELECT ciudad, telefono, direccion, codigo_postal FROM web_sedes WHERE _parent_id = $1 ORDER BY _order', [id]),
+    filas<{ email: string }>('SELECT email FROM web_emails_consultas WHERE _parent_id = $1 ORDER BY _order', [id]),
+    filas<{ url: string | null; filename: string | null }>('SELECT v.url, v.filename FROM web_rels r JOIN videos v ON v.id = r.videos_id WHERE r.parent_id = $1 AND r.path = $2 ORDER BY r."order"', [id, 'portada.videos']),
+  ])
+  let imagen: Media | undefined
+  if (g.portada_imagen_id) {
+    const media = await uno<Record<string, unknown>>('SELECT * FROM media WHERE id = $1', [Number(g.portada_imagen_id)])
+    if (media?.filename) {
+      imagen = {
+        id: Number(media.id),
+        alt: String(media.alt ?? ''),
+        url: await urlDe('media', String(media.filename)),
+        filename: String(media.filename),
+        updatedAt: String(media.updated_at ?? ''),
+        createdAt: String(media.created_at ?? ''),
+      }
+    }
+  }
   return {
     portada: {
-      antetitulo: texto(p.antetitulo, d.portada.antetitulo),
-      titulo: texto(p.titulo, d.portada.titulo),
-      subtitulo: texto(p.subtitulo, d.portada.subtitulo),
-      imagen: p.imagen && typeof p.imagen === 'object' && p.imagen.url ? (p.imagen as Media) : undefined,
-      videos: (Array.isArray(p.videos) ? p.videos : []).map((v: { url?: string } | string) => (typeof v === 'object' && v?.url ? v.url : '')).filter(Boolean),
+      antetitulo: texto(g.portada_antetitulo, d.portada.antetitulo),
+      titulo: texto(g.portada_titulo, d.portada.titulo),
+      subtitulo: texto(g.portada_subtitulo, d.portada.subtitulo),
+      imagen,
+      videos: (await Promise.all(videos.map(async (v) => (v.filename ? urlDe('videos', v.filename) : v.url ?? '')))).filter(Boolean),
     },
     presentacion: texto(g.presentacion, d.presentacion),
-    profesionales: g.profesionales?.length ? g.profesionales : d.profesionales,
-    sedes: g.sedes?.length ? g.sedes : d.sedes,
+    profesionales: profesionales.length ? profesionales : d.profesionales,
+    sedes: sedes.length ? sedes.map((s) => ({ ciudad: s.ciudad, direccion: s.direccion, codigoPostal: s.codigo_postal, telefono: s.telefono })) : d.sedes,
     email: texto(g.email, d.email),
     descripcion: texto(g.descripcion, d.descripcion),
-    legal: { titular: texto(l.titular, d.legal.titular), cif: l.cif || undefined, domicilio: texto(l.domicilio, d.legal.domicilio), registro: l.registro || undefined },
-    textosLegales: { avisoLegal: g.avisoLegal || undefined, privacidad: g.privacidad || undefined, cookies: g.cookies || undefined },
-    emailsConsultas: (g.emailsConsultas ?? []).map((e: { email: string }) => e.email).filter(Boolean),
+    legal: { titular: texto(g.legal_titular, d.legal.titular), cif: (g.legal_cif as string) || undefined, domicilio: texto(g.legal_domicilio, d.legal.domicilio), registro: (g.legal_registro as string) || undefined },
+    textosLegales: { avisoLegal: (g.aviso_legal as string) || undefined, privacidad: (g.privacidad as string) || undefined, cookies: (g.cookies as string) || undefined },
+    emailsConsultas: emails.map((e) => e.email).filter(Boolean),
   }
 }
 
-export async function serviciosPublicados(payload: Payload) {
-  const { docs } = await payload.find({ collection: 'servicios', where: { publicado: { equals: true } }, sort: 'orden', limit: 200, depth: 0, overrideAccess: true })
-  return docs as Servicio[]
+export async function serviciosPublicados() {
+  const rows = await filas<Record<string, unknown>>('SELECT * FROM servicios WHERE publicado IS NULL OR publicado IS NOT FALSE ORDER BY orden LIMIT 200')
+  const puntos = rows.length
+    ? await filas<{ parent: number; texto: string; id: string }>('SELECT _parent_id AS parent, texto, id FROM servicios_puntos ORDER BY _order')
+    : []
+  return rows.map((r) => ({
+    id: Number(r.id),
+    titulo: String(r.titulo),
+    slug: (r.slug as string) ?? null,
+    area: (r.area as Servicio['area']) ?? 'calidad',
+    resumen: String(r.resumen ?? ''),
+    enlace: (r.enlace as string) ?? null,
+    textoEnlace: (r.texto_enlace as string) ?? null,
+    destacado: bool(r.destacado),
+    orden: r.orden == null ? null : Number(r.orden),
+    publicado: bool(r.publicado),
+    puntos: puntos.filter((p) => p.parent === Number(r.id)).map((p) => ({ texto: p.texto, id: p.id })),
+  })) satisfies Servicio[]
 }
 
-export async function trabajosPublicados(payload: Payload, limite = 200) {
-  const { docs } = await payload.find({ collection: 'trabajos', where: { publicado: { equals: true } }, sort: 'orden', limit: limite, depth: 0, overrideAccess: true })
-  return docs as Trabajo[]
+export async function trabajosPublicados(limite = 200) {
+  const rows = await filas<Record<string, unknown>>('SELECT * FROM trabajos WHERE publicado IS NULL OR publicado IS NOT FALSE ORDER BY orden LIMIT $1', [limite])
+  return rows.map((r) => ({
+    id: Number(r.id),
+    titulo: String(r.titulo),
+    descripcion: (r.descripcion as string) ?? null,
+    cliente: (r.cliente as string) ?? null,
+    lugar: (r.lugar as string) ?? null,
+    anio: r.anio == null ? null : Number(r.anio),
+    area: (r.area as Trabajo['area']) ?? 'calidad',
+    orden: r.orden == null ? null : Number(r.orden),
+    publicado: bool(r.publicado),
+  }))
 }
 
 /** Clientes únicos a partir de los trabajos, en orden de aparición. */

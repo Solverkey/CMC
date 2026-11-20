@@ -1,8 +1,10 @@
 import { after } from 'next/server'
-import type { PayloadRequest } from 'payload'
+import nodemailer from 'nodemailer'
 import { registrar } from './actividad'
+import type { Ctx } from './ctx'
 import { firmar } from './cifrado'
 import { leerConfiguracion, urlServidor, type Config } from './configuracion'
+import { ahora, ejecutar, filas, jsonParam, jsonSql, uno } from './db'
 import type { ClavePlantilla } from './plantillas'
 import { escaparHtml, rellenar } from './texto'
 
@@ -13,15 +15,12 @@ export type Programar = {
   para: Destinatario[]
   vars: Record<string, string | number | null | undefined>
   enlace?: string
-  /** Si se indican, sustituyen el asunto y el cuerpo de la plantilla. Sirven para un cambio de estado concreto. */
   asunto?: string
   cuerpo?: string
   empresa?: number | string | null
   documento?: number | string | null
   hilo?: number | string | null
-  /** Evita enviar dos veces el mismo aviso: se combina con el email del destinatario. */
   idempotencia?: string
-  /** Para correos con un enlace de un solo uso (contraseñas): no se guarda el HTML en el registro. */
   sensible?: boolean
   responderA?: string
 }
@@ -51,11 +50,21 @@ ${enlace && boton ? `<p style="margin:24px 0"><a href="${escaparHtml(enlace)}" s
 </body></html>`
 }
 
+const transporte = () =>
+  process.env.SMTP_HOST
+    ? nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: Number(process.env.SMTP_PORT || 587),
+        secure: Number(process.env.SMTP_PORT) === 465,
+        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+      })
+    : nodemailer.createTransport({ jsonTransport: true })
+
 /**
- * Programa un correo por destinatario. Queda registrado como «pendiente» y lo envía la cola `correo`
- * (con reintentos). Devuelve los IDs creados.
+ * Programa un correo por destinatario. Queda en `correos` como pendiente y se envía al terminar la petición
+ * (o en el cron, si el origen es el sistema).
  */
-export async function programarCorreo(req: PayloadRequest, p: Programar) {
+export async function programarCorreo(req: Ctx, p: Programar) {
   const vistos = new Set<string>()
   const para = p.para.filter((d) => {
     const e = d.email?.trim().toLowerCase()
@@ -64,58 +73,98 @@ export async function programarCorreo(req: PayloadRequest, p: Programar) {
     return true
   })
   if (!para.length) return []
-  const cfg = await leerConfiguracion(req.payload, req)
+  const cfg = await leerConfiguracion()
   const t = cfg.plantilla(p.plantilla)
   const asunto = rellenar(p.asunto || t.asunto, p.vars)
   const cuerpo = rellenar(p.cuerpo || t.cuerpo, p.vars)
-  const ids: (number | string)[] = []
+  const ids: number[] = []
+  const momento = ahora()
 
   for (const d of para) {
     const clave = p.idempotencia ? `${p.idempotencia}|${d.email.toLowerCase()}` : undefined
     if (clave) {
-      const ya = await req.payload.count({ collection: 'correos', where: { idempotencia: { equals: clave } }, overrideAccess: true, req })
-      if (ya.totalDocs) continue
+      const ya = await uno<{ id: number }>('SELECT id FROM correos WHERE idempotencia = $1', [clave])
+      if (ya) continue
     }
-    const correo = await req.payload.create({
-      collection: 'correos',
-      overrideAccess: true,
-      req,
-      data: {
-        para: d.email,
-        usuario: (d.usuario as number | null | undefined) ?? null,
-        destinatario: d.tipo,
-        plantilla: p.plantilla,
+    const correo = await uno<{ id: number }>(
+      `INSERT INTO correos (asunto, para, usuario_id, destinatario, plantilla, texto, empresa_id, documento_id, hilo_id, idempotencia, estado, updated_at, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pendiente', $11, $11) RETURNING id`,
+      [
         asunto,
-        texto: p.sensible ? '(contenido con enlace de un solo uso, no se conserva)' : cuerpo,
-        empresa: (p.empresa as number) ?? null,
-        documento: (p.documento as number) ?? null,
-        hilo: (p.hilo as number) ?? null,
-        idempotencia: clave,
-        estado: 'pendiente',
-      },
-    })
+        d.email,
+        d.usuario ?? null,
+        d.tipo,
+        p.plantilla,
+        p.sensible ? '(contenido con enlace de un solo uso, no se conserva)' : cuerpo,
+        p.empresa ?? null,
+        p.documento ?? null,
+        p.hilo ?? null,
+        clave ?? null,
+        momento,
+      ],
+    )
+    if (!correo) continue
     const pixel = `${urlServidor()}/api/correos/${correo.id}/abierto?f=${firmar(String(correo.id), 'pixel')}`
     const html = maquetar(cfg, { asunto, cuerpo, boton: t.boton, enlace: p.enlace, pixel })
-    await req.payload.jobs.queue({
-      task: 'enviarCorreo',
-      queue: 'correo',
-      input: { correo: String(correo.id), html, desde: `"${cfg.remitenteNombre.replace(/"/g, '')}" <${cfg.remitenteEmail}>`, responderA: p.responderA ?? cfg.responderA ?? '' },
-      req,
-    })
+    const desde = `"${cfg.remitenteNombre.replace(/"/g, '')}" <${cfg.remitenteEmail}>`
+    await ejecutar(`INSERT INTO payload_kv (key, data) VALUES ($1, ${jsonSql(2)})`, [
+      `correo:${correo.id}`,
+      jsonParam({ html, desde, responderA: p.responderA ?? cfg.responderA ?? '', intentos: 0 }),
+    ])
     await registrar(req, { accion: 'correo', descripcion: `Correo «${asunto}» programado para ${d.email}`, empresa: p.empresa, coleccion: 'correos', registroId: correo.id })
     ids.push(correo.id)
   }
-  if (ids.length && req.context.origen !== 'sistema') enviarAlResponder(req)
+  if (ids.length && req.origen !== 'sistema' && req.context.origen !== 'sistema') enviarAlResponder()
   return ids
 }
 
-/** Envía la cola en cuanto termina la petición. Las tareas programadas (origen «sistema») la vacían ellas mismas. */
-function enviarAlResponder(req: PayloadRequest) {
+function enviarAlResponder() {
   try {
     after(async () => {
-      await req.payload.jobs.run({ queue: 'correo', limit: 50, silent: { info: true } })
+      await vaciarCola(50)
     })
   } catch {
-    // Fuera de una petición (seed, scripts): lo envía la próxima ejecución de la cola.
+    // Fuera de una petición (seed, scripts): lo envía la próxima ejecución del cron.
   }
+}
+
+/** Envía los correos pendientes. El cron nocturno llama aquí con un límite alto. */
+export async function vaciarCola(limite = 50) {
+  const pendientes = await filas<{ id: number; para: string; asunto: string; empresa_id: number | null }>(
+    `SELECT id, para, asunto, empresa_id FROM correos WHERE estado IN ('pendiente', 'error') ORDER BY id LIMIT $1`,
+    [limite],
+  )
+  const mailer = transporte()
+  let enviados = 0
+  let errores = 0
+  for (const correo of pendientes) {
+    const guardado = await uno<{ data: unknown }>('SELECT data FROM payload_kv WHERE key = $1', [`correo:${correo.id}`])
+    const data = (typeof guardado?.data === 'string' ? JSON.parse(guardado.data) : guardado?.data) as { html?: string; desde?: string; responderA?: string; intentos?: number } | null
+    if (!data?.html || !data.desde) continue
+    if ((data.intentos ?? 0) >= 4) continue
+    try {
+      const res = await mailer.sendMail({
+        from: data.desde,
+        to: correo.para,
+        subject: correo.asunto,
+        html: data.html,
+        ...(data.responderA ? { replyTo: data.responderA } : {}),
+      })
+      await ejecutar(
+        `UPDATE correos SET estado = 'enviado', enviado_en = $2, message_id = $3, error = NULL, updated_at = $2 WHERE id = $1`,
+        [correo.id, ahora(), String(res.messageId ?? '').replace(/[<>]/g, '') || null],
+      )
+      await ejecutar('DELETE FROM payload_kv WHERE key = $1', [`correo:${correo.id}`])
+      await registrar({ user: null, headers: new Headers(), origen: 'sistema', context: {} }, { accion: 'correo_enviado', descripcion: `Correo «${correo.asunto}» enviado a ${correo.para}`, empresa: correo.empresa_id, coleccion: 'correos', registroId: correo.id })
+      enviados++
+      if (!process.env.SMTP_HOST) console.info(`[correo] ${correo.para} · ${correo.asunto}`)
+    } catch (err) {
+      const intentos = (data.intentos ?? 0) + 1
+      await ejecutar(`UPDATE correos SET estado = 'error', error = $2, updated_at = $3 WHERE id = $1`, [correo.id, String((err as Error).message ?? err).slice(0, 500), ahora()])
+      await ejecutar(`UPDATE payload_kv SET data = ${jsonSql(2)} WHERE key = $1`, [`correo:${correo.id}`, jsonParam({ ...data, intentos })])
+      errores++
+      await registrar({ user: null, headers: new Headers(), origen: 'sistema', context: {} }, { accion: 'correo_error', descripcion: `Error al enviar «${correo.asunto}» a ${correo.para}`, empresa: correo.empresa_id, coleccion: 'correos', registroId: correo.id })
+    }
+  }
+  return { revisados: pendientes.length, enviados, errores }
 }

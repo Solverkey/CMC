@@ -1,23 +1,28 @@
 import Link from 'next/link'
-import type { Where } from 'payload'
+import { listarHilos } from '@/datos/consultas'
+import type { Documento, Empresa, Hilo, User } from '@/datos/tipos'
 import { Icon } from '@/components/Icon'
 import { contexto, empresasDelUsuario, fmtHora } from '@/lib/payload'
-import type { Documento, Empresa, Hilo, User } from '@/payload-types'
 
 export const metadata = { title: 'Comunicación con CMC' }
 
 export default async function MensajesPage({ searchParams }: { searchParams: Promise<{ empresa?: string; estado?: string; mias?: string; q?: string }> }) {
   const sp = await searchParams
-  const { payload, user, cmc } = await contexto('/portal/mensajes')
+  const { user, cmc } = await contexto('/portal/mensajes')
   const { empresas, empresa } = await empresasDelUsuario(user, sp.empresa)
   const estado = sp.estado === 'resuelto' || sp.estado === 'todos' ? sp.estado : 'abierto'
 
-  const and: Where[] = []
-  if (sp.empresa) and.push({ empresa: { equals: sp.empresa } })
-  if (estado !== 'todos') and.push({ estado: { equals: estado } })
-  if (cmc && sp.mias) and.push({ asignado: { equals: user.id } })
-  if (sp.q) and.push({ asunto: { like: sp.q } })
-  const hilos = await payload.find({ collection: 'hilos', where: { and }, user, overrideAccess: false, depth: 1, limit: 200, sort: '-ultimoMensaje' })
+  const cond: string[] = []
+  const params: unknown[] = []
+  const add = (sql: string, valor: unknown) => {
+    params.push(valor)
+    cond.push(sql.replace('?', `$${params.length}`))
+  }
+  if (sp.empresa) add('empresa_id = ?', Number(sp.empresa))
+  if (estado !== 'todos') add('estado = ?', estado)
+  if (cmc && sp.mias) add('asignado_id = ?', user.id)
+  if (sp.q) add('asunto LIKE ?', `%${sp.q}%`)
+  const hilos = await listarHilos(user, `${cond.length ? `AND ${cond.join(' AND ')} ` : ''}ORDER BY ultimo_mensaje DESC LIMIT 200`, params)
   const enlace = (extra: Record<string, string | undefined>) => `?${new URLSearchParams(Object.entries({ ...sp, ...extra }).filter(([, v]) => v) as [string, string][])}`
 
   return (
@@ -64,8 +69,8 @@ export default async function MensajesPage({ searchParams }: { searchParams: Pro
             </tr>
           </thead>
           <tbody>
-            {hilos.docs.length === 0 && <tr><td colSpan={6} className="muted">No hay conversaciones. <Link href={enlace({ estado: 'todos' })}>Ver todas</Link></td></tr>}
-            {(hilos.docs as Hilo[]).map((h) => (
+            {hilos.length === 0 && <tr><td colSpan={6} className="muted">No hay conversaciones. <Link href={enlace({ estado: 'todos' })}>Ver todas</Link></td></tr>}
+            {hilos.map((h) => (
               <tr key={h.id}>
                 <td><Link href={`/portal/mensajes/${h.id}`}>{h.asunto}</Link></td>
                 {(cmc || empresas.length > 1) && <td>{(h.empresa as Empresa)?.razonSocial}</td>}

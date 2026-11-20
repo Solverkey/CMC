@@ -1,38 +1,59 @@
 import { headers as nextHeaders } from 'next/headers'
 import { redirect } from 'next/navigation'
-import { createLocalReq, getPayload, type PayloadRequest } from 'payload'
-import config from '@payload-config'
-import type { User } from '@/payload-types'
-import { esSuperAdmin, superAdminSin2FA } from '@/access'
+import { esSuperAdmin, empresasDe, superAdminSin2FA } from '@/access'
+import { mapEmpresa } from '@/datos/mapas'
+import type { Empresa, User } from '@/datos/tipos'
+import { bit, filas } from '@/lib/db'
+import type { Ctx } from './ctx'
+import { leerSesion } from './sesion'
 
-export const payloadClient = () => getPayload({ config })
+type Fila = Record<string, unknown>
 
-/** Usuario de la sesión (cookie de Payload) o redirección al login del portal, volviendo después a `next`. */
+/** Usuario de la sesión o redirección al login del portal, volviendo después a `next`. */
 export async function requireUser(next?: string) {
-  const h = await nextHeaders()
-  const payload = await payloadClient()
-  const { user } = await payload.auth({ headers: h })
-  if (!user || user.collection !== 'users') redirect(next ? `/portal/login?next=${encodeURIComponent(next)}` : '/portal/login')
-  return { payload, user: user as User }
+  const user = await leerSesion()
+  if (!user) redirect(next ? `/portal/login?next=${encodeURIComponent(next)}` : '/portal/login')
+  return { user }
 }
 
 /**
- * Sesión y una petición local con ese usuario, para usar los mismos servicios que la API y el servidor MCP.
- * Un super administrador sin doble factor no tiene permisos: se le lleva a activarlo antes de consultar nada.
+ * Sesión del portal. Un super administrador sin doble factor no tiene permisos:
+ * se le lleva a activarlo antes de consultar nada.
  */
 export async function contexto(next?: string, { permitirSin2FA = false } = {}) {
-  const { payload, user } = await requireUser(next)
+  const { user } = await requireUser(next)
   if (!permitirSin2FA && next !== '/portal/seguridad' && superAdminSin2FA(user)) redirect('/portal/seguridad')
-  const req = await createLocalReq({ user: { ...user, collection: 'users' } as never, req: { headers: new Headers(await nextHeaders()) } as Partial<PayloadRequest> }, payload)
-  return { payload, user, req, cmc: esSuperAdmin(user) }
+  const req: Ctx = { user, headers: new Headers(await nextHeaders()), origen: 'web', context: {} }
+  return { user, req, cmc: esSuperAdmin(user) }
+}
+
+async function conEmails(rows: Fila[]): Promise<Empresa[]> {
+  if (!rows.length) return []
+  const ids = rows.map((r) => Number(r.id))
+  const avisos = await filas<Fila>(`SELECT _parent_id AS padre, id, email FROM empresas_emails_aviso WHERE _parent_id IN (${ids.join(',')}) ORDER BY _order`)
+  const porEmpresa = new Map<number, { email: string; id: string }[]>()
+  for (const a of avisos) {
+    const lista = porEmpresa.get(Number(a.padre)) ?? []
+    lista.push({ email: String(a.email), id: String(a.id) })
+    porEmpresa.set(Number(a.padre), lista)
+  }
+  return rows.map((r) => mapEmpresa(r, porEmpresa.get(Number(r.id)) ?? []))
 }
 
 /** Empresas accesibles por el usuario y la empresa activa (?empresa=ID; por defecto la primera). */
 export async function empresasDelUsuario(user: User, activa?: string) {
-  const payload = await payloadClient()
-  const res = await payload.find({ collection: 'empresas', user, overrideAccess: false, limit: 1000, depth: 1, sort: 'razonSocial', where: { activa: { equals: true } } })
-  const empresa = res.docs.find((e) => String(e.id) === activa) ?? res.docs[0] ?? null
-  return { empresas: res.docs, empresa }
+  const activaBit = bit(true)
+  const ids = esSuperAdmin(user) ? null : empresasDe(user).map(Number)
+  if (ids && !ids.length) return { empresas: [] as Empresa[], empresa: null }
+  const rows = await filas<Fila>(
+    ids
+      ? `SELECT * FROM empresas WHERE activa = $1 AND id IN (${ids.join(',')}) ORDER BY razon_social`
+      : 'SELECT * FROM empresas WHERE activa = $1 ORDER BY razon_social',
+    [activaBit],
+  )
+  const empresas = await conEmails(rows)
+  const empresa = empresas.find((e) => String(e.id) === activa) ?? empresas[0] ?? null
+  return { empresas, empresa }
 }
 
 export const fmt = (d?: string | null) => (d ? new Date(d).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—')

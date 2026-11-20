@@ -2,8 +2,9 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { FilaEnlace } from '@/components/FilaEnlace'
 import { tamano } from '@/lib/subidas'
+import { listarEnvios } from '@/datos/consultas'
+import type { Documento, Empresa, Envio, User } from '@/datos/tipos'
 import { contexto, empresasDelUsuario, fmt, fmtHora } from '@/lib/payload'
-import type { Documento, Empresa, Envio, User } from '@/payload-types'
 
 export const metadata = { title: 'Bandeja de envíos' }
 
@@ -12,21 +13,18 @@ const LABEL_ENVIO = { pendiente: 'Pendiente de revisión', publicado: 'Publicado
 
 export default async function EnviarPage({ searchParams }: { searchParams: Promise<{ empresa?: string; estado?: string }> }) {
   const sp = await searchParams
-  const { payload, user, cmc } = await contexto('/portal/enviar')
+  const { user, cmc } = await contexto('/portal/enviar')
   const { empresa } = await empresasDelUsuario(user, sp.empresa)
   if (!empresa) return <p>No tiene ninguna empresa asignada.</p>
   if (!cmc) redirect(`/portal/documentos?empresa=${empresa.id}`)
 
   const estado = (['pendiente', 'publicado', 'rechazado'] as const).find((e) => e === sp.estado) ?? 'pendiente'
-  const envios = await payload.find({
-    collection: 'envios',
+  const envios = await listarEnvios(
     user,
-    overrideAccess: false,
-    depth: 1,
-    limit: 100,
-    sort: cmc ? 'createdAt' : '-createdAt',
-    where: { and: [...(cmc && !sp.empresa ? [] : [{ empresa: { equals: empresa.id } }]), ...(estado ? [{ estado: { equals: estado } }] : [])] },
-  })
+    `${cmc && !sp.empresa ? '' : 'AND empresa_id = $1 '}AND estado = $${cmc && !sp.empresa ? 1 : 2} ORDER BY created_at ${cmc ? 'ASC' : 'DESC'}`,
+    cmc && !sp.empresa ? [estado] : [empresa.id, estado],
+    100,
+  )
 
   return (
     <>
@@ -57,8 +55,8 @@ export default async function EnviarPage({ searchParams }: { searchParams: Promi
               </tr>
             </thead>
             <tbody>
-              {envios.docs.length === 0 && <tr><td colSpan={5} className="muted">No hay envíos.</td></tr>}
-              {(envios.docs as Envio[]).map((e) => {
+              {envios.length === 0 && <tr><td colSpan={5} className="muted">No hay envíos.</td></tr>}
+              {envios.map((e) => {
                 const doc = e.documentoRelacionado as Documento | null
                 const por = e.enviadoPor as User | null
                 return (

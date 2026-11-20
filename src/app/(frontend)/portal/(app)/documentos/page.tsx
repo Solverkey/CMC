@@ -1,11 +1,12 @@
 import Link from 'next/link'
 import { BotonZip, MarcarTodos } from '@/components/BotonZip'
+import { claseFila } from '@/components/MarcaEstado'
 import { EnviarCmc } from '@/components/EnviarCmc'
 import { Icon } from '@/components/Icon'
-import { StatusBadge } from '@/components/StatusBadge'
 import { ESTADOS, resolverGestion, type Estado } from '@/lib/estado'
+import { categoriasDeEmpresa, listarEnvios } from '@/datos/consultas'
+import type { Categoria, Documento, Empresa, Envio } from '@/datos/tipos'
 import { contexto, diasHasta, empresasDelUsuario, fmt, fmtHora } from '@/lib/payload'
-import type { Categoria, Documento, Empresa, Envio } from '@/payload-types'
 import { buscarDocumentos } from '@/servicios/documentos'
 
 export const metadata = { title: 'Documentos' }
@@ -16,7 +17,7 @@ const FILTROS: Estado[] = ['verde', 'amarillo', 'naranja', 'rojo', 'azul', 'negr
 
 export default async function DocumentosPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams
-  const { payload, user, req, cmc } = await contexto('/portal/documentos')
+  const { user, req, cmc } = await contexto('/portal/documentos')
   const { empresas, empresa } = await empresasDelUsuario(user, sp.empresa)
   const estados = ([] as string[]).concat(sp.estado ?? []).filter(Boolean) as Estado[]
   const pagina = Math.max(Number(sp.pagina) || 1, 1)
@@ -24,19 +25,9 @@ export default async function DocumentosPage({ searchParams }: { searchParams: P
 
   const [r, categorias, categoriasEnvio, envios] = await Promise.all([
     buscarDocumentos(req, { q: sp.q, empresa: sp.empresa, categoria: sp.categoria, estados, desde: sp.desde, hasta: sp.hasta, limite: 50, pagina, orden: sp.orden || 'fechaCaducidad' }),
-    sp.empresa ? payload.find({ collection: 'categorias', where: { empresa: { equals: sp.empresa } }, user, overrideAccess: false, depth: 0, limit: 500, sort: 'nombre' }) : null,
-    destino ? payload.find({ collection: 'categorias', where: { and: [{ empresa: { equals: destino.id } }, { archivada: { not_equals: true } }] }, user, overrideAccess: false, depth: 0, limit: 200, sort: 'orden' }) : null,
-    !cmc
-      ? payload.find({
-          collection: 'envios',
-          user,
-          overrideAccess: false,
-          depth: 0,
-          limit: 50,
-          sort: '-createdAt',
-          where: sp.empresa ? { empresa: { equals: sp.empresa } } : {},
-        })
-      : null,
+    sp.empresa ? categoriasDeEmpresa(sp.empresa) : null,
+    destino ? categoriasDeEmpresa(destino.id, { archivadas: false }) : null,
+    !cmc ? listarEnvios(user, `${sp.empresa ? 'AND empresa_id = $1 ' : ''}ORDER BY created_at DESC`, sp.empresa ? [Number(sp.empresa)] : [], 50) : null,
   ])
   const docs = r.docs as Documento[]
   const enlace = (p: number) => {
@@ -64,7 +55,7 @@ export default async function DocumentosPage({ searchParams }: { searchParams: P
             <EnviarCmc
               empresaId={String(destino.id)}
               empresaNombre={destino.razonSocial}
-              categorias={(categoriasEnvio?.docs ?? []).map((c) => ({ id: String(c.id), nombre: c.nombre }))}
+              categorias={(categoriasEnvio ?? []).map((c) => ({ id: String(c.id), nombre: c.nombre }))}
             />
           )}
         </div>
@@ -90,7 +81,7 @@ export default async function DocumentosPage({ searchParams }: { searchParams: P
               <label htmlFor="categoria">Categoría</label>
               <select id="categoria" name="categoria" defaultValue={sp.categoria ?? ''}>
                 <option value="">Todas</option>
-                {categorias.docs.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
               </select>
             </div>
           )}
@@ -123,24 +114,25 @@ export default async function DocumentosPage({ searchParams }: { searchParams: P
           <table className="table">
             <thead>
               <tr>
-                <th style={{ width: 32 }}><MarcarTodos formId="seleccion" /></th>
+                <th style={{ width: 44 }}><MarcarTodos formId="seleccion" /></th>
                 <th>Documento</th>
                 {empresas.length > 1 && <th>Empresa</th>}
                 <th>Categoría</th>
                 <th>Caducidad</th>
-                <th>Estado</th>
               </tr>
             </thead>
             <tbody>
-              {docs.length === 0 && <tr><td colSpan={6} className="muted">No hay documentos con esos criterios.</td></tr>}
+              {docs.length === 0 && <tr><td colSpan={empresas.length > 1 ? 5 : 4} className="muted">No hay documentos con esos criterios.</td></tr>}
               {docs.map((d) => {
                 const emp = d.empresa as Empresa
                 const cat = d.categoria as Categoria
                 const dias = diasHasta(d.fechaCaducidad)
+                const fila = claseFila(d.estado as Estado, d.estadoManual === 'naranja' && d.estado !== 'naranja')
                 return (
-                  <tr key={d.id}>
+                  <tr key={d.id} className={fila.className}>
                     <td><input type="checkbox" name="ids" value={d.id} aria-label={`Seleccionar ${d.titulo}`} /></td>
                     <td>
+                      <span className="sr-only">{fila.label}</span>
                       <Link href={`/portal/documentos/${d.id}`}>{d.titulo}</Link>
                       <span className="muted" style={{ display: 'block' }}>{[d.referencia, d.organismo].filter(Boolean).join(' · ')}</span>
                       {resolverGestion(emp?.gestion, cat?.gestion, d.gestion) === 'gestionado' && <span className="tag">Gestionado por CMC</span>}
@@ -150,10 +142,6 @@ export default async function DocumentosPage({ searchParams }: { searchParams: P
                     <td style={{ whiteSpace: 'nowrap' }}>
                       {d.fechaCaducidad ? fmt(d.fechaCaducidad) : 'Indefinido'}
                       {dias !== null && <span className="muted" style={{ display: 'block' }}>{dias < 0 ? `Caducó hace ${-dias} días` : `Faltan ${dias} días`}</span>}
-                    </td>
-                    <td>
-                      <StatusBadge estado={d.estado as Estado} />
-                      {d.estadoManual === 'naranja' && d.estado !== 'naranja' && <span style={{ display: 'block', marginTop: 4 }}><StatusBadge estado="naranja" /></span>}
                     </td>
                   </tr>
                 )
@@ -188,8 +176,8 @@ export default async function DocumentosPage({ searchParams }: { searchParams: P
                 </tr>
               </thead>
               <tbody>
-                {(envios?.docs.length ?? 0) === 0 && <tr><td colSpan={4} className="muted">Todavía no has enviado ningún archivo.</td></tr>}
-                {(envios?.docs as Envio[] | undefined)?.map((e) => {
+                {(envios?.length ?? 0) === 0 && <tr><td colSpan={4} className="muted">Todavía no has enviado ningún archivo.</td></tr>}
+                {envios?.map((e) => {
                   const emp = empresas.find((x) => x.id === e.empresa)
                   const destinoId = typeof e.documentoDestino === 'number' ? e.documentoDestino : e.documentoDestino?.id
                   const estado = e.estado === 'publicado' ? 'verde' : e.estado === 'rechazado' ? 'rojo' : 'naranja'

@@ -3,8 +3,9 @@ import { notFound, redirect } from 'next/navigation'
 import { FormAccion } from '@/components/FormAccion'
 import { VisorArchivo } from '@/components/VisorArchivo'
 import { resolverEnvio } from '@/app/(frontend)/portal/acciones'
+import { categoriasDeEmpresa, envioPorId, listarDocumentos } from '@/datos/consultas'
+import type { Documento, Empresa } from '@/datos/tipos'
 import { contexto, fmt, idDe } from '@/lib/payload'
-import type { Documento, Empresa } from '@/payload-types'
 
 export const metadata = { title: 'Revisar envío' }
 
@@ -12,14 +13,14 @@ const dia = (v?: string | null) => (v ? v.slice(0, 10) : '')
 
 export default async function RevisarEnvio({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const { payload, user, cmc } = await contexto(`/portal/enviar/${id}`)
+  const { user, cmc } = await contexto(`/portal/enviar/${id}`)
   if (!cmc) redirect('/portal/enviar')
-  const envio = await payload.findByID({ collection: 'envios', id, user, overrideAccess: false, depth: 1 }).catch(() => null)
+  const envio = await envioPorId(id, user)
   if (!envio) notFound()
   const empresaId = String(idDe(envio.empresa))
   const [categorias, documentos] = await Promise.all([
-    payload.find({ collection: 'categorias', where: { and: [{ empresa: { equals: empresaId } }, { archivada: { not_equals: true } }] }, depth: 0, limit: 200, sort: 'orden', overrideAccess: true }),
-    payload.find({ collection: 'documentos', where: { empresa: { equals: empresaId } }, depth: 0, limit: 500, sort: 'titulo', overrideAccess: true }),
+    categoriasDeEmpresa(empresaId, { archivadas: false }),
+    listarDocumentos(user, 'AND empresa_id = $1 ORDER BY titulo', [Number(empresaId)], 500),
   ])
   const empresa = envio.empresa as Empresa
   const relacionado = envio.documentoRelacionado as Documento | null
@@ -27,19 +28,18 @@ export default async function RevisarEnvio({ params }: { params: Promise<{ id: s
   return (
     <>
       <Link href="/portal/enviar" className="small">← Bandeja de envíos</Link>
-      <div className="stack" style={{ gap: 4 }}>
-        <p className="small muted">{empresa?.razonSocial}</p>
-        <h1>{envio.titulo}</h1>
-        <p className="muted">
-          {envio.relacion}
-          {relacionado && typeof relacionado === 'object' ? ` de «${relacionado.titulo}»` : ''}
-          {envio.nuevaCaducidad ? ` · caducidad propuesta ${fmt(envio.nuevaCaducidad)}` : ''}
-        </p>
-        {envio.comentario && <p>{envio.comentario}</p>}
-      </div>
-
+      <p className="small muted">{empresa?.razonSocial}</p>
       <div className={envio.url ? 'revision' : 'stack'}>
-      <div className="stack">
+      <div className="revision__form stack" style={{ gap: 16 }}>
+        <div className="stack" style={{ gap: 4 }}>
+          <h1>{envio.titulo}</h1>
+          <p className="muted">
+            {envio.relacion}
+            {relacionado && typeof relacionado === 'object' ? ` de «${relacionado.titulo}»` : ''}
+            {envio.nuevaCaducidad ? ` · caducidad propuesta ${fmt(envio.nuevaCaducidad)}` : ''}
+          </p>
+          {envio.comentario && <p>{envio.comentario}</p>}
+        </div>
       {!envio.url && <p className="muted">Este envío no tiene archivo.</p>}
       {envio.estado !== 'pendiente' ? (
         <p className="alert">Este envío ya está {envio.estado}.{envio.motivoRechazo ? ` Motivo: ${envio.motivoRechazo}` : ''}</p>
@@ -50,14 +50,14 @@ export default async function RevisarEnvio({ params }: { params: Promise<{ id: s
             <label htmlFor="documentoDestino">Publicar en un documento existente</label>
             <select className="input" id="documentoDestino" name="documentoDestino" defaultValue={relacionado && typeof relacionado === 'object' ? String(relacionado.id) : ''}>
               <option value="">Crear un documento nuevo</option>
-              {documentos.docs.map((d) => <option key={d.id} value={d.id}>{d.titulo}</option>)}
+              {documentos.map((d) => <option key={d.id} value={d.id}>{d.titulo}</option>)}
             </select>
           </div>
           <div className="field">
             <label htmlFor="categoriaDestino">Categoría, si es nuevo</label>
             <select className="input" id="categoriaDestino" name="categoriaDestino">
               <option value="">Elegir</option>
-              {categorias.docs.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+              {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
             </select>
           </div>
           <div className="row">
@@ -78,13 +78,16 @@ export default async function RevisarEnvio({ params }: { params: Promise<{ id: s
       )}
       </div>
       {envio.url && (
-        <aside className="revision__archivo stack">
-          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2>Archivo</h2>
-            <a className="btn btn--secondary btn--sm" href={envio.url} download={envio.filename ?? undefined}>Descargar</a>
-          </div>
-          <VisorArchivo url={envio.url} nombre={envio.filename ?? envio.titulo} mime={envio.mimeType} />
-        </aside>
+        <>
+          <div className="revision__corte" aria-hidden="true" />
+          <aside className="revision__archivo stack">
+            <div className="row" style={{ justifyContent: 'space-between' }}>
+              <h2>Archivo</h2>
+              <a className="btn btn--secondary btn--sm" href={envio.url} download={envio.filename ?? undefined}>Descargar</a>
+            </div>
+            <VisorArchivo url={envio.url} nombre={envio.filename ?? envio.titulo} mime={envio.mimeType} />
+          </aside>
+        </>
       )}
       </div>
     </>

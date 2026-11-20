@@ -1,10 +1,9 @@
 import { CabeceraPagina } from './Bloques'
 import { bloques, textoLegal, type PaginaLegal as Clave } from '@/lib/legal'
-import { payloadClient } from '@/lib/payload'
 import { leerWeb } from '@/lib/web'
 
 export async function PaginaLegal({ pagina, titulo }: { pagina: Clave; titulo: string }) {
-  const web = await leerWeb(await payloadClient())
+  const web = await leerWeb()
   return (
     <>
       <CabeceraPagina antetitulo="Información legal" titulo={titulo} />

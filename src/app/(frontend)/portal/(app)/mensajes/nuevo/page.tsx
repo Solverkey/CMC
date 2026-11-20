@@ -1,16 +1,17 @@
 import Link from 'next/link'
 import { EmpresaSelector } from '@/components/EmpresaSelector'
 import { MensajeForm } from '@/components/MensajeForm'
+import { documentoPorId } from '@/datos/consultas'
 import { contexto, empresasDelUsuario } from '@/lib/payload'
 
 export const metadata = { title: 'Nueva conversación' }
 
 export default async function NuevaConversacion({ searchParams }: { searchParams: Promise<{ empresa?: string; documento?: string; categoria?: string }> }) {
   const sp = await searchParams
-  const { payload, user } = await contexto('/portal/mensajes/nuevo')
+  const { user } = await contexto('/portal/mensajes/nuevo')
   const { empresas, empresa } = await empresasDelUsuario(user, sp.empresa)
   if (!empresa) return <p>No tiene ninguna empresa asignada.</p>
-  const doc = sp.documento ? await payload.findByID({ collection: 'documentos', id: sp.documento, user, overrideAccess: false, depth: 0 }).catch(() => null) : null
+  const doc = sp.documento ? await documentoPorId(sp.documento, user) : null
 
   return (
     <>

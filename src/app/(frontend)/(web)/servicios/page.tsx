@@ -2,7 +2,6 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Icon } from '@/components/Icon'
 import { BandaContacto, CabeceraPagina, IconoArea } from '@/components/web/Bloques'
-import { payloadClient } from '@/lib/payload'
 import { AREAS, leerWeb, serviciosPublicados } from '@/lib/web'
 
 export const metadata: Metadata = {
@@ -12,8 +11,7 @@ export const metadata: Metadata = {
 }
 
 export default async function ServiciosPage() {
-  const payload = await payloadClient()
-  const [web, servicios] = await Promise.all([leerWeb(payload), serviciosPublicados(payload)])
+  const [web, servicios] = await Promise.all([leerWeb(), serviciosPublicados()])
   const grupos = AREAS.map((a) => ({ ...a, servicios: servicios.filter((s) => s.area === a.value) })).filter((g) => g.servicios.length)
 
   return (

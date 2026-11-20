@@ -1,4 +1,5 @@
-import type { CollectionAfterChangeHook, PayloadRequest } from 'payload'
+import type { Ctx } from './ctx'
+import { ahora, ejecutar, jsonParam, jsonSql } from './db'
 
 export const ACCIONES = [
   { label: 'Inicio de sesión', value: 'login' },
@@ -38,8 +39,8 @@ type Evento = {
   usuario?: { id: number | string; email?: string } | null
 }
 
-export const origenDe = (req: PayloadRequest): 'web' | 'mcp' | 'sistema' =>
-  req.payloadAPI === 'MCP' || req.context?.origen === 'mcp' ? 'mcp' : req.user && req.context?.origen !== 'sistema' ? 'web' : 'sistema'
+export const origenDe = (req: Ctx): 'web' | 'mcp' | 'sistema' =>
+  req.origen === 'mcp' || req.context?.origen === 'mcp' ? 'mcp' : req.user && req.context?.origen !== 'sistema' && req.origen !== 'sistema' ? 'web' : 'sistema'
 
 const idDe = (v: unknown) => (v && typeof v === 'object' && 'id' in v ? (v as { id: number | string }).id : (v as number | string | null | undefined))
 
@@ -47,29 +48,30 @@ const idDe = (v: unknown) => (v && typeof v === 'object' && 'id' in v ? (v as { 
  * Registro de actividad inalterable (RF-20). Nunca interrumpe la operación que lo origina.
  * `aislado`: se escribe fuera de la transacción de la petición (p. ej. un login fallido, que se revierte).
  */
-export async function registrar(req: PayloadRequest, e: Evento, { aislado = false } = {}) {
-  const usuario = e.usuario ?? (req.user && req.user.collection === 'users' ? (req.user as { id: number | string; email?: string }) : null)
+export async function registrar(req: Ctx, e: Evento, _opts: { aislado?: boolean } = {}) {
+  const usuario = e.usuario ?? (req.user && req.user.collection === 'users' ? req.user : null)
+  const momento = ahora()
   try {
-    await req.payload.create({
-      collection: 'actividad',
-      overrideAccess: true,
-      ...(aislado ? {} : { req }),
-      data: {
-        accion: e.accion,
-        descripcion: e.descripcion.slice(0, 1000),
-        usuario: (usuario?.id as number | undefined) ?? null,
-        email: usuario?.email ?? null,
-        empresa: (idDe(e.empresa) as number | null) ?? null,
-        coleccion: e.coleccion,
-        registroId: e.registroId != null ? String(e.registroId) : undefined,
-        origen: origenDe(req),
-        ip: req.headers?.get?.('x-forwarded-for')?.split(',')[0]?.trim() || req.headers?.get?.('x-real-ip') || undefined,
-        userAgent: req.headers?.get?.('user-agent')?.slice(0, 300) || undefined,
-        datos: e.datos,
-      },
-    })
+    await ejecutar(
+      `INSERT INTO actividad (accion, descripcion, usuario_id, email, empresa_id, origen, coleccion, registro_id, ip, user_agent, datos, updated_at, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, ${jsonSql(11)}, $12, $12)`,
+      [
+        e.accion,
+        e.descripcion.slice(0, 1000),
+        usuario?.id ?? null,
+        usuario?.email ?? null,
+        idDe(e.empresa) || null,
+        origenDe(req),
+        e.coleccion ?? null,
+        e.registroId != null ? String(e.registroId) : null,
+        req.headers?.get?.('x-forwarded-for')?.split(',')[0]?.trim() || req.headers?.get?.('x-real-ip') || null,
+        req.headers?.get?.('user-agent')?.slice(0, 300) || null,
+        e.datos ? jsonParam(e.datos) : null,
+        momento,
+      ],
+    )
   } catch (err) {
-    req.payload.logger.error({ err, msg: 'No se pudo escribir el registro de actividad' })
+    console.error('No se pudo escribir el registro de actividad', err)
   }
 }
 
@@ -96,19 +98,3 @@ const normal = (v: unknown): unknown => {
   return v ?? null
 }
 
-/** Alta y edición de cualquier colección, con el detalle de los campos cambiados. */
-export const auditar =
-  (etiqueta: string, titulo: (doc: Record<string, unknown>) => string, empresaDe: (doc: Record<string, unknown>) => unknown = (d) => d.empresa): CollectionAfterChangeHook =>
-  async ({ doc, previousDoc, operation, req, collection }) => {
-    const diff = operation === 'update' ? cambios(previousDoc, doc) : {}
-    if (operation === 'update' && !Object.keys(diff).length) return doc
-    await registrar(req, {
-      accion: operation === 'create' ? 'alta' : 'edicion',
-      descripcion: `${operation === 'create' ? 'Alta' : 'Edición'} de ${etiqueta} «${titulo(doc)}»`,
-      empresa: idDe(empresaDe(doc)),
-      coleccion: collection.slug,
-      registroId: doc.id,
-      datos: operation === 'update' ? { cambios: diff } : undefined,
-    })
-    return doc
-  }

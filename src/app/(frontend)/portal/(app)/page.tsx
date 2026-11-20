@@ -10,9 +10,11 @@ import { guardarAntelacionCategoria, guardarAvisoEmpresa } from '@/app/(frontend
 import { empresasDe } from '@/access'
 import { peorEstado, type Estado } from '@/lib/estado'
 import { conteoPorEmpresa } from '@/lib/estadisticas'
+import { categoriasDeEmpresa, listarDocumentos } from '@/datos/consultas'
+import type { Documento, Empresa, User } from '@/datos/tipos'
+import { filas as consultar } from '@/lib/db'
 import { contexto, empresasDelUsuario, idDe } from '@/lib/payload'
 import { leerConfiguracion } from '@/lib/configuracion'
-import type { Documento, Empresa, User } from '@/payload-types'
 
 export const metadata = { title: 'Panel' }
 
@@ -21,7 +23,7 @@ const VISIBLES: Estado[] = ['verde', 'amarillo', 'naranja', 'rojo', 'azul', 'neg
 
 export default async function PanelPage({ searchParams }: { searchParams: Promise<{ empresa?: string; plazo?: string; filtro?: string; q?: string }> }) {
   const sp = await searchParams
-  const { payload, user, cmc } = await contexto('/portal')
+  const { user, cmc } = await contexto('/portal')
   const { empresas, empresa } = await empresasDelUsuario(user, sp.empresa)
   if (!empresa) return <p>No tiene ninguna empresa asignada. Contacte con CMC.</p>
   if (!sp.empresa && (cmc || empresas.length > 1)) return <Consolidado empresas={empresas} cmc={cmc} user={user} filtro={sp.filtro} q={sp.q} />
@@ -31,13 +33,11 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
   limite.setDate(limite.getDate() + plazo)
 
   // overrideAccess: false: el control de acceso por empresa se aplica siempre en el servidor.
-  const [docs, categorias, cfg] = await Promise.all([
-    payload.find({ collection: 'documentos', user, overrideAccess: false, depth: 1, limit: 5000, where: { empresa: { equals: empresa.id } }, sort: 'fechaCaducidad' }),
-    payload.find({ collection: 'categorias', user, overrideAccess: false, depth: 0, limit: 500, where: { empresa: { equals: empresa.id }, archivada: { not_equals: true } }, sort: 'orden' }),
-    leerConfiguracion(payload),
+  const [lista, categorias, cfg] = await Promise.all([
+    listarDocumentos(user, 'AND empresa_id = $1 ORDER BY fecha_caducidad', [empresa.id], 5000),
+    categoriasDeEmpresa(empresa.id, { archivadas: false }),
+    leerConfiguracion(),
   ])
-
-  const lista = docs.docs as Documento[]
   const visibles = cmc ? VISIBLES : VISIBLES.filter((e) => e !== 'azul')
   const cuenta = (e: Estado, de = lista) => de.filter((d) => d.estado === e).length
   const proximos = lista.filter((d) => d.estado !== 'azul' && d.estado !== 'negro' && d.fechaCaducidad && new Date(d.fechaCaducidad) <= limite)
@@ -58,11 +58,11 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
             <SubirDocumento
               empresaId={String(empresa.id)}
               meses={empresa.antelacionMeses ?? cfg.antelacionMeses}
-              categorias={categorias.docs.map((c) => ({ id: String(c.id), nombre: c.nombre }))}
+              categorias={categorias.map((c) => ({ id: String(c.id), nombre: c.nombre }))}
               documentos={lista.map((d) => ({ id: String(d.id), titulo: d.titulo }))}
             />
           ) : (
-            <EnviarCmc empresaId={String(empresa.id)} empresaNombre={empresa.razonSocial} categorias={categorias.docs.map((c) => ({ id: String(c.id), nombre: c.nombre }))} />
+            <EnviarCmc empresaId={String(empresa.id)} empresaNombre={empresa.razonSocial} categorias={categorias.map((c) => ({ id: String(c.id), nombre: c.nombre }))} />
           )}
         </div>
       </div>
@@ -102,8 +102,8 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
               <button className="btn btn--secondary btn--sm" type="submit">Guardar estándar</button>
             </FormAccion>
           )}
-          {categorias.docs.length === 0 && <p className="muted">Sin categorías.</p>}
-          {categorias.docs.map((c) => {
+          {categorias.length === 0 && <p className="muted">Sin categorías.</p>}
+          {categorias.map((c) => {
             const deCat = lista.filter((d) => idDe(d.categoria) === String(c.id) && visibles.includes(d.estado as Estado))
             return (
               <div key={c.id} className="stack" style={{ gap: 8, paddingTop: 8, borderTop: '1px solid var(--line)' }}>
@@ -136,22 +136,21 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
 
 /** Vista consolidada (RF-15) y panel de CMC por empresa (RF-14). */
 async function Consolidado({ empresas, cmc, user, filtro, q }: { empresas: Empresa[]; cmc: boolean; user: User; filtro?: string; q?: string }) {
-  const { payload } = await contexto()
-  const conteo = await conteoPorEmpresa(payload, cmc ? null : empresasDe(user))
+  const conteo = await conteoPorEmpresa(cmc ? null : empresasDe(user))
   const visibles = cmc ? VISIBLES : VISIBLES.filter((e) => e !== 'azul')
   const [pendientes, abiertos] = cmc
     ? await Promise.all([
-        payload.find({ collection: 'envios', where: { estado: { equals: 'pendiente' } }, limit: 0, pagination: false, depth: 0, overrideAccess: true, select: { empresa: true } }),
-        payload.find({ collection: 'hilos', where: { estado: { equals: 'abierto' } }, limit: 0, pagination: false, depth: 0, overrideAccess: true, select: { empresa: true } }),
+        consultar<{ empresa: number; n: number }>(`SELECT empresa_id AS empresa, COUNT(*) AS n FROM envios WHERE estado = 'pendiente' GROUP BY empresa_id`),
+        consultar<{ empresa: number; n: number }>(`SELECT empresa_id AS empresa, COUNT(*) AS n FROM hilos WHERE estado = 'abierto' GROUP BY empresa_id`),
       ])
-    : [null, null]
-  const porEmpresa = (docs: { empresa?: unknown }[] | undefined, id: number) => docs?.filter((d) => idDe(d.empresa) === String(id)).length ?? 0
+    : [[], []]
+  const porEmpresa = (docs: { empresa: number; n: number }[], id: number) => Number(docs.find((d) => String(d.empresa) === String(id))?.n ?? 0)
 
   const filas = empresas
     .map((e) => {
       const c = conteo[String(e.id)] ?? { verde: 0, amarillo: 0, naranja: 0, rojo: 0, azul: 0, negro: 0 }
       const peor = peorEstado(VISIBLES.filter((k) => c[k] > 0))
-      return { e, c, peor, envios: porEmpresa(pendientes?.docs, e.id), hilos: porEmpresa(abiertos?.docs, e.id) }
+      return { e, c, peor, envios: porEmpresa(pendientes, e.id), hilos: porEmpresa(abiertos, e.id) }
     })
     .filter((f) => !q || f.e.razonSocial.toLowerCase().includes(q.toLowerCase()) || f.e.cif.toLowerCase().includes(q.toLowerCase()))
     .filter((f) => (filtro === 'atencion' ? f.c.negro + f.c.rojo + f.c.amarillo + f.c.naranja > 0 || f.envios > 0 : filtro === 'gestionado' ? f.e.gestion === 'gestionado' : true))

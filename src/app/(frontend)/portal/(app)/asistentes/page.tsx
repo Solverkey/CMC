@@ -2,21 +2,21 @@ import { nuevaClave, revocarClave } from '../../acciones'
 import { FormAccion } from '@/components/FormAccion'
 import { urlServidor } from '@/lib/configuracion'
 import { contexto, fmtHora } from '@/lib/payload'
-import { COLECCION_CLAVES } from '@/mcp/claves'
+import { clavesDe } from '@/mcp/claves'
 
 export const metadata = { title: 'Asistentes de IA' }
 
 export default async function AsistentesPage() {
-  const { payload, user } = await contexto('/portal/asistentes')
-  const claves = await payload.find({
-    collection: COLECCION_CLAVES as 'payload-mcp-api-keys',
-    where: { user: { equals: user.id } },
-    user,
-    overrideAccess: false,
-    depth: 0,
-    limit: 100,
-    sort: '-createdAt',
-  })
+  const { user } = await contexto('/portal/asistentes')
+  const claves = (await clavesDe(user.id, false)).map((c) => ({
+    id: c.id,
+    label: c.label,
+    origen: c.origen,
+    createdAt: (c as { created_at?: string }).created_at,
+    ultimoUso: c.ultimo_uso,
+    caduca: c.caduca,
+    renovacionCaduca: c.renovacion_caduca,
+  }))
   const url = `${urlServidor()}/api/mcp`
 
   return (
@@ -63,8 +63,8 @@ export default async function AsistentesPage() {
           <table className="table">
             <thead><tr><th>Asistente</th><th>Tipo</th><th>Creado</th><th>Último uso</th><th>Caduca</th><th /></tr></thead>
             <tbody>
-              {claves.docs.length === 0 && <tr><td colSpan={6} className="muted">Ningún asistente conectado.</td></tr>}
-              {claves.docs.map((c) => {
+              {claves.length === 0 && <tr><td colSpan={6} className="muted">Ningún asistente conectado.</td></tr>}
+              {claves.map((c) => {
                 const d = c as typeof c & { origen?: string; caduca?: string; renovacionCaduca?: string; ultimoUso?: string; label?: string }
                 return (
                   <tr key={c.id}>

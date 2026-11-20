@@ -2,21 +2,22 @@ import { notFound } from 'next/navigation'
 import { leerConfiguracion } from '@/lib/configuracion'
 import { almacenamiento } from '@/lib/estadisticas'
 import { tamano } from '@/lib/subidas'
+import { filas as consultar } from '@/lib/db'
 import { contexto } from '@/lib/payload'
 
 export const metadata = { title: 'Almacenamiento' }
 
 export default async function AlmacenamientoPage() {
-  const { payload, req, cmc } = await contexto('/portal/almacenamiento')
+  const { cmc } = await contexto('/portal/almacenamiento')
   if (!cmc) notFound()
   const [uso, cfg, empresas] = await Promise.all([
-    almacenamiento(payload),
-    leerConfiguracion(payload, req),
-    payload.find({ collection: 'empresas', limit: 0, pagination: false, depth: 0, overrideAccess: true, select: { razonSocial: true } }),
+    almacenamiento(),
+    leerConfiguracion(),
+    consultar<{ id: number; razon_social: string }>('SELECT id, razon_social FROM empresas'),
   ])
   const limite = cfg.limiteGB * 1024 ** 3
   const pct = limite ? Math.round((uso.total / limite) * 100) : 0
-  const nombre = new Map(empresas.docs.map((e) => [String(e.id), e.razonSocial]))
+  const nombre = new Map(empresas.map((e) => [String(e.id), e.razon_social]))
   const filas = Object.entries(uso.porEmpresa).sort((a, b) => b[1] - a[1])
 
   return (

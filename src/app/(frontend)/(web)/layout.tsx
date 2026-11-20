@@ -1,13 +1,12 @@
 import { SiteFooter, SiteHeader } from '@/components/SiteHeader'
 import { AvisoCookies } from '@/components/web/AvisoCookies'
-import { payloadClient } from '@/lib/payload'
 import { leerWeb } from '@/lib/web'
 
 // El contenido se edita en Administración → Web y se ve al momento.
 export const dynamic = 'force-dynamic'
 
 export default async function WebLayout({ children }: { children: React.ReactNode }) {
-  const web = await leerWeb(await payloadClient())
+  const web = await leerWeb()
   return (
     <>
       <a href="#contenido" className="saltar">

@@ -1,13 +1,14 @@
 import { CambiarPassword, DobleFactor } from '@/components/DobleFactor'
 import { dosFactorObligatorio } from '@/access'
+import { listarActividad } from '@/datos/consultas'
 import { contexto, fmtHora } from '@/lib/payload'
 
 export const metadata = { title: 'Seguridad' }
 
 export default async function SeguridadPage() {
-  const { payload, user } = await contexto('/portal/seguridad')
+  const { user } = await contexto('/portal/seguridad')
   const obligatorio = user.rol === 'superadmin' && dosFactorObligatorio()
-  const accesos = await payload.find({ collection: 'actividad', where: { usuario: { equals: user.id }, accion: { in: ['login', 'login_fallido'] } }, sort: '-createdAt', limit: 10, depth: 0, overrideAccess: true })
+  const accesos = await listarActividad(null, `AND usuario_id = $1 AND accion IN ('login', 'login_fallido')`, [user.id], 10)
 
   return (
     <>
@@ -34,7 +35,7 @@ export default async function SeguridadPage() {
       <section className="card stack">
         <h2 style={{ fontSize: 22, lineHeight: '28px' }}>Últimos accesos</h2>
         <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>
-          {accesos.docs.map((a) => (
+          {accesos.map((a) => (
             <li key={a.id}>{fmtHora(a.createdAt)} · {a.accion === 'login' ? 'Acceso correcto' : <span className="error">Intento fallido</span>}{a.ip ? ` · ${a.ip}` : ''}</li>
           ))}
         </ul>

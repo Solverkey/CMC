@@ -1,6 +1,6 @@
 /**
  * Plantillas de correo por defecto (informe funcional, apartado 6). El super administrador las edita en
- * Administración → Configuración. Variables: {{empresa}} {{documento}} {{caducidad}} {{dias}} {{nombre}}
+ * Portal → Configuración. Variables: {{empresa}} {{documento}} {{caducidad}} {{dias}} {{nombre}}
  * {{tecnico}} {{motivo}} {{asunto}} {{mensaje}} {{resumen}} {{uso}} {{limite}}.
  */
 export type ClavePlantilla = keyof typeof PLANTILLAS

@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { FormAccion } from '@/components/FormAccion'
 import { crearSelector, quitarSelector } from '@/app/(frontend)/portal/acciones'
+import { listarCatalogoActivo } from '@/lib/catalogo'
 import { contexto } from '@/lib/payload'
 
 export const metadata = { title: 'Selectores' }
@@ -12,9 +13,9 @@ const TIPOS = [
 ] as const
 
 export default async function SelectoresPage() {
-  const { payload, cmc } = await contexto('/portal/selectores')
+  const { cmc } = await contexto('/portal/selectores')
   if (!cmc) redirect('/portal')
-  const lista = await payload.find({ collection: 'catalogo', where: { activo: { equals: true } }, sort: 'nombre', limit: 500, depth: 0, overrideAccess: true })
+  const lista = await listarCatalogoActivo()
 
   return (
     <>
@@ -23,7 +24,7 @@ export default async function SelectoresPage() {
         <p className="muted">Opciones que salen al escribir un nombre. Se pueden añadir y quitar. Quitar una opción no borra los documentos que ya la usan.</p>
       </div>
       {TIPOS.map((tipo) => {
-        const opciones = lista.docs.filter((o) => o.tipo === tipo.id)
+        const opciones = lista.filter((o) => o.tipo === tipo.id)
         return (
           <section key={tipo.id} className="card stack" style={{ gap: 12 }}>
             <h2 style={{ fontSize: 22, lineHeight: '28px', margin: 0 }}>{tipo.texto}</h2>

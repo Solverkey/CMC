@@ -1,9 +1,10 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import type { Where } from 'payload'
+import { contar, listarActividad } from '@/datos/consultas'
+import { visible } from '@/datos/mapas'
+import type { Empresa } from '@/datos/tipos'
 import { ACCIONES } from '@/lib/actividad'
 import { contexto, empresasDelUsuario, fmtHora } from '@/lib/payload'
-import type { Empresa } from '@/payload-types'
 
 export const metadata = { title: 'Registro de actividad' }
 
@@ -12,19 +13,29 @@ const ORIGEN: Record<string, string> = { web: 'Portal', mcp: 'Asistente de IA', 
 
 export default async function ActividadPage({ searchParams }: { searchParams: Promise<{ empresa?: string; accion?: string; email?: string; desde?: string; hasta?: string; origen?: string; pagina?: string }> }) {
   const sp = await searchParams
-  const { payload, user, cmc } = await contexto('/portal/actividad')
+  const { user, cmc } = await contexto('/portal/actividad')
   const { empresas } = await empresasDelUsuario(user)
   const pagina = Math.max(Number(sp.pagina) || 1, 1)
 
-  const and: Where[] = []
-  if (sp.empresa) and.push({ empresa: { equals: sp.empresa } })
-  if (sp.accion) and.push({ accion: { equals: sp.accion } })
-  if (sp.origen) and.push({ origen: { equals: sp.origen } })
-  if (sp.email) and.push({ email: { like: sp.email } })
-  if (sp.desde) and.push({ createdAt: { greater_than_equal: new Date(sp.desde).toISOString() } })
-  if (sp.hasta) and.push({ createdAt: { less_than_equal: new Date(`${sp.hasta}T23:59:59`).toISOString() } })
-  const r = await payload.find({ collection: 'actividad', where: { and }, user, overrideAccess: false, depth: 1, limit: 100, page: pagina, sort: '-createdAt' }).catch(() => null)
-  if (!r) notFound()
+  const cond: string[] = []
+  const params: unknown[] = []
+  const add = (sql: string, valor: unknown) => {
+    params.push(valor)
+    cond.push(sql.replace('?', `$${params.length}`))
+  }
+  if (sp.empresa) add('empresa_id = ?', Number(sp.empresa))
+  if (sp.accion) add('accion = ?', sp.accion)
+  if (sp.origen) add('origen = ?', sp.origen)
+  if (sp.email) add('email LIKE ?', `%${sp.email}%`)
+  if (sp.desde) add('created_at >= ?', new Date(sp.desde).toISOString())
+  if (sp.hasta) add('created_at <= ?', new Date(`${sp.hasta}T23:59:59`).toISOString())
+  const extra = cond.length ? `AND ${cond.join(' AND ')}` : ''
+  const filtro = `(${visible(user, 'empresa_id')} OR empresa_id IS NULL) ${extra}`
+  const [docs, totalDocs] = await Promise.all([
+    listarActividad(user, extra, params, 100, (pagina - 1) * 100),
+    contar('actividad', filtro, params),
+  ])
+  const r = { docs, totalDocs, totalPages: Math.max(Math.ceil(totalDocs / 100), 1), hasPrevPage: pagina > 1, hasNextPage: pagina * 100 < totalDocs }
   const enlace = (p: number) => `?${new URLSearchParams({ ...Object.fromEntries(Object.entries(sp).filter(([, v]) => v)), pagina: String(p) })}`
 
   return (

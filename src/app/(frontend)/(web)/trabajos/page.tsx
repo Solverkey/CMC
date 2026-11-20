@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { BandaContacto, CabeceraPagina, IconoArea } from '@/components/web/Bloques'
-import { payloadClient } from '@/lib/payload'
 import { AREAS, areaDe, clientesDe, leerWeb, trabajosPublicados, type Area } from '@/lib/web'
 
 export const metadata: Metadata = {
@@ -12,8 +11,7 @@ export const metadata: Metadata = {
 
 export default async function TrabajosPage({ searchParams }: { searchParams: Promise<{ area?: string }> }) {
   const { area } = await searchParams
-  const payload = await payloadClient()
-  const [web, todos] = await Promise.all([leerWeb(payload), trabajosPublicados(payload)])
+  const [web, todos] = await Promise.all([leerWeb(), trabajosPublicados()])
   const filtro = AREAS.some((a) => a.value === area) ? (area as Area) : null
   const trabajos = filtro ? todos.filter((t) => t.area === filtro) : todos
   const areas = AREAS.filter((a) => todos.some((t) => t.area === a.value))

@@ -8,28 +8,28 @@ import { SubirDocumento } from '@/components/SubirDocumento'
 import { resolverGestion, type Estado } from '@/lib/estado'
 import { leerConfiguracion } from '@/lib/configuracion'
 import { tamano } from '@/lib/subidas'
+import { archivosDeDocumento, categoriasDeEmpresa, documentoPorId, listarHilos } from '@/datos/consultas'
+import type { Archivo, Categoria, Empresa, User } from '@/datos/tipos'
 import { contexto, fmt, fmtHora, idDe } from '@/lib/payload'
-import type { Archivo, Categoria, Empresa, User } from '@/payload-types'
 
 export default async function DocumentoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const { payload, user, cmc } = await contexto(`/portal/documentos/${id}`)
-  const doc = await payload.findByID({ collection: 'documentos', id, user, overrideAccess: false, depth: 1 }).catch(() => null)
+  const { user, cmc } = await contexto(`/portal/documentos/${id}`)
+  const doc = await documentoPorId(id, user)
   if (!doc) notFound()
 
   const empresa = doc.empresa as Empresa
   const categoria = doc.categoria as Categoria
   const [archivos, hilos, categorias] = await Promise.all([
-    payload.find({ collection: 'archivos', user, overrideAccess: false, depth: 1, limit: 200, sort: '-createdAt', where: { documento: { equals: doc.id } } }),
-    payload.find({ collection: 'hilos', user, overrideAccess: false, depth: 0, limit: 50, sort: '-ultimoMensaje', where: { documento: { equals: doc.id } } }),
-    payload.find({ collection: 'categorias', where: { and: [{ empresa: { equals: empresa.id } }, { archivada: { not_equals: true } }] }, depth: 0, limit: 200, sort: 'orden', overrideAccess: true }),
+    archivosDeDocumento(doc.id),
+    listarHilos(user, 'AND documento_id = $1 ORDER BY ultimo_mensaje DESC LIMIT 50', [doc.id]),
+    categoriasDeEmpresa(empresa.id, { archivadas: false }),
   ])
   const vigenteId = idDe(doc.archivoVigente)
-  // Un anexo (complementario) nunca es el vigente; si el documento no lo tiene fijado, el último que sustituye.
-  const vigente = archivos.docs.find((a) => String(a.id) === vigenteId) ?? archivos.docs.find((a) => !a.historico && a.efectos?.includes('sustituye'))
+  const vigente = archivos.find((a) => String(a.id) === vigenteId) ?? archivos.find((a) => !a.historico && a.efectos?.includes('sustituye'))
   const gestion = resolverGestion(empresa?.gestion, categoria?.gestion, doc.gestion)
   const tecnico = [doc.tecnico, categoria?.responsable, empresa?.tecnico].find((t) => t && typeof t === 'object') as User | undefined
-  const cfg = await leerConfiguracion(payload)
+  const cfg = await leerConfiguracion()
   const mesesAviso = typeof categoria?.antelacionMeses === 'number' ? categoria.antelacionMeses : typeof empresa?.antelacionMeses === 'number' ? empresa.antelacionMeses : cfg.antelacionMeses
 
   return (
@@ -68,7 +68,7 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
             <EditarDocumento
               id={String(doc.id)}
               empresaId={String(empresa.id)}
-              categorias={categorias.docs.map((c) => ({ id: String(c.id), nombre: c.nombre }))}
+              categorias={categorias.map((c) => ({ id: String(c.id), nombre: c.nombre }))}
               valores={{
                 titulo: doc.titulo,
                 categoria: String(idDe(doc.categoria)),
@@ -123,10 +123,10 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
           <section className="card stack">
             <div className="row" style={{ justifyContent: 'space-between' }}>
               <h2 style={{ fontSize: 22, lineHeight: '28px' }}>Conversaciones sobre este documento</h2>
-              {hilos.totalDocs > 0 && <a className="small" href={`/api/comunicaciones/${empresa.id}?documento=${doc.id}`}>Exportar historial (PDF)</a>}
+              {hilos.length > 0 && <a className="small" href={`/api/comunicaciones/${empresa.id}?documento=${doc.id}`}>Exportar historial (PDF)</a>}
             </div>
-            {hilos.docs.length === 0 && <p className="muted">Ninguna todavía.</p>}
-            {hilos.docs.map((h) => (
+            {hilos.length === 0 && <p className="muted">Ninguna todavía.</p>}
+            {hilos.map((h) => (
               <Link key={h.id} href={`/portal/mensajes/${h.id}`} className="file" style={{ textDecoration: 'none', color: 'inherit' }}>
                 <Icon name="chat" />
                 <span className="file__name">{h.asunto}</span>
@@ -148,8 +148,8 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
         <aside className="card stack" style={{ flex: '1 1 320px', minWidth: 0 }}>
           <h2 style={{ fontSize: 22, lineHeight: '28px' }}>Histórico</h2>
           <ol className="timeline">
-            {archivos.docs.length === 0 && <li className="muted">Sin archivos todavía.</li>}
-            {archivos.docs.map((a: Archivo) => (
+            {archivos.length === 0 && <li className="muted">Sin archivos todavía.</li>}
+            {archivos.map((a: Archivo) => (
               <li key={a.id}>
                 <span className={`dot${a.historico ? ' dot--azul' : ''}`} aria-hidden="true" />
                 <div className="stack" style={{ gap: 0 }}>

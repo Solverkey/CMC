@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import { BandaContacto, CabeceraPagina, Parrafos } from '@/components/web/Bloques'
-import { payloadClient } from '@/lib/payload'
 import { leerWeb } from '@/lib/web'
 
 export const metadata: Metadata = {
@@ -10,7 +9,7 @@ export const metadata: Metadata = {
 }
 
 export default async function QuienesSomos() {
-  const web = await leerWeb(await payloadClient())
+  const web = await leerWeb()
   return (
     <>
       <CabeceraPagina antetitulo="Quiénes somos" titulo="Más de veinte años en calidad y medio ambiente" />

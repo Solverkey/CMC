@@ -4,18 +4,16 @@ import { Icon } from '@/components/Icon'
 import { StatusBadge } from '@/components/StatusBadge'
 import { BandaContacto, IconoArea } from '@/components/web/Bloques'
 import { CarruselPortada } from '@/components/web/CarruselPortada'
-import { payloadClient } from '@/lib/payload'
 import { videosRemotos, videosSueltos } from '@/lib/portada'
 import { AREAS, areaDe, clientesDe, leerWeb, serviciosPublicados, trabajosPublicados, type Area } from '@/lib/web'
 
 export async function generateMetadata(): Promise<Metadata> {
-  const web = await leerWeb(await payloadClient())
+  const web = await leerWeb()
   return { title: { absolute: 'CMC · Consultoría de calidad y medio ambiente en Logroño y Burgos' }, description: web.descripcion, alternates: { canonical: '/' } }
 }
 
 export default async function Inicio() {
-  const payload = await payloadClient()
-  const [web, servicios, trabajos] = await Promise.all([leerWeb(payload), serviciosPublicados(payload), trabajosPublicados(payload)])
+  const [web, servicios, trabajos] = await Promise.all([leerWeb(), serviciosPublicados(), trabajosPublicados()])
   const destacados = (servicios.filter((s) => s.destacado).length ? servicios.filter((s) => s.destacado) : servicios).slice(0, 6)
   const clientes = clientesDe(trabajos)
   const { portada } = web

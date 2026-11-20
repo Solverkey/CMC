@@ -10,8 +10,8 @@ const CAMPOS = ['response_type', 'client_id', 'redirect_uri', 'code_challenge', 
 export default async function AutorizarPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams
   const params = Object.fromEntries(CAMPOS.filter((k) => sp[k]).map((k) => [k, String(sp[k])]))
-  const { user, req } = await contexto(`/portal/oauth/autorizar?${new URLSearchParams(params)}`)
-  const v = await validarAutorizacion(req, params)
+  const { user } = await contexto(`/portal/oauth/autorizar?${new URLSearchParams(params)}`)
+  const v = await validarAutorizacion(params)
 
   if ('error' in v)
     return (

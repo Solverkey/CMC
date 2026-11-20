@@ -15,7 +15,7 @@ test('el panel de administración redirige al acceso del portal', async ({ page 
 test('credenciales incorrectas muestran un aviso', async ({ page }) => {
   await page.goto('/portal/login')
   await page.getByLabel('Correo electrónico').fill('nadie@ejemplo.test')
-  await page.getByLabel('Contraseña').fill('NoEsLaClave2026')
+  await page.getByLabel('Contraseña', { exact: true }).fill('NoEsLaClave2026')
   await page.getByRole('button', { name: 'Entrar' }).click()
   await expect(page.locator('main [role=alert], form [role=alert]').first()).toContainText('incorrectos')
 })
@@ -24,7 +24,7 @@ test('un usuario de empresa entra y ve su panel', async ({ page }) => {
   test.skip(!process.env.E2E_EMAIL, 'Defina E2E_EMAIL y E2E_PASSWORD (por ejemplo, los del seed).')
   await page.goto('/portal/login')
   await page.getByLabel('Correo electrónico').fill(process.env.E2E_EMAIL!)
-  await page.getByLabel('Contraseña').fill(process.env.E2E_PASSWORD!)
+  await page.getByLabel('Contraseña', { exact: true }).fill(process.env.E2E_PASSWORD!)
   await page.getByRole('button', { name: 'Entrar' }).click()
   await expect(page).toHaveURL(/\/portal$/)
   await expect(page.getByRole('navigation', { name: 'Portal' })).toBeVisible()

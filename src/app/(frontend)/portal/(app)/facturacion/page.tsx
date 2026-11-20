@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { resolverGestion } from '@/lib/estado'
+import { listarDocumentos } from '@/datos/consultas'
+import type { Categoria, Documento, Empresa } from '@/datos/tipos'
 import { contexto, fmt } from '@/lib/payload'
-import type { Categoria, Documento, Empresa } from '@/payload-types'
 
 export const metadata = { title: 'Facturación' }
 
@@ -10,7 +11,7 @@ const clave = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padSta
 /** Lista de consulta de los clientes que CMC debe facturar en el mes. No se conecta a ningún programa de facturación. */
 export default async function FacturacionPage({ searchParams }: { searchParams: Promise<{ mes?: string }> }) {
   const sp = await searchParams
-  const { payload, user, cmc } = await contexto('/portal/facturacion')
+  const { user, cmc } = await contexto('/portal/facturacion')
   const ahora = new Date()
   const pedido = /^(\d{4})-(\d{2})$/.exec(sp.mes ?? '')
   const anio = pedido ? Number(pedido[1]) : ahora.getFullYear()
@@ -19,26 +20,19 @@ export default async function FacturacionPage({ searchParams }: { searchParams: 
   const fin = new Date(anio, mes, 1)
   const etiqueta = inicio.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
 
-  const docs = await payload.find({
-    collection: 'documentos',
+  const docs = await listarDocumentos(
     user,
-    overrideAccess: false,
-    depth: 1,
-    limit: 5000,
-    where: {
-      or: [
-        { and: [{ fechaAviso: { greater_than_equal: inicio.toISOString() } }, { fechaAviso: { less_than: fin.toISOString() } }] },
-        { and: [{ fechaCaducidad: { greater_than_equal: inicio.toISOString() } }, { fechaCaducidad: { less_than: fin.toISOString() } }] },
-      ],
-    },
-  })
+    'AND ((fecha_aviso >= $1 AND fecha_aviso < $2) OR (fecha_caducidad >= $1 AND fecha_caducidad < $2))',
+    [inicio.toISOString(), fin.toISOString()],
+    5000,
+  )
 
   const dentro = (fecha?: string | null) => {
     if (!fecha) return false
     const t = new Date(fecha).getTime()
     return t >= inicio.getTime() && t < fin.getTime()
   }
-  const filas = (docs.docs as Documento[])
+  const filas = docs
     .map((d) => {
       const empresa = d.empresa as Empresa
       const cat = d.categoria as Categoria

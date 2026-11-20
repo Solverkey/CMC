@@ -6,20 +6,21 @@ import { FormAccion } from '@/components/FormAccion'
 import { Icon } from '@/components/Icon'
 import { MensajeForm } from '@/components/MensajeForm'
 import { tamano } from '@/lib/subidas'
+import { hiloPorId, mensajesDeHilo, usuariosCms } from '@/datos/consultas'
+import type { Adjunto, Documento, Empresa, Hilo, Mensaje, User } from '@/datos/tipos'
 import { contexto, fmtHora, idDe } from '@/lib/payload'
-import type { Adjunto, Documento, Empresa, Hilo, Mensaje, User } from '@/payload-types'
 
 export default async function ConversacionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const { payload, user, cmc } = await contexto(`/portal/mensajes/${id}`)
-  const hilo = (await payload.findByID({ collection: 'hilos', id, user, overrideAccess: false, depth: 1 }).catch(() => null)) as Hilo | null
+  const { user, cmc } = await contexto(`/portal/mensajes/${id}`)
+  const hilo = await hiloPorId(id, user)
   if (!hilo) notFound()
 
   const empresa = hilo.empresa as Empresa
   const doc = hilo.documento as Documento | null
   const [mensajes, tecnicos] = await Promise.all([
-    payload.find({ collection: 'mensajes', where: { hilo: { equals: hilo.id } }, user, overrideAccess: false, depth: 1, limit: 1000, sort: 'createdAt' }),
-    cmc ? payload.find({ collection: 'users', where: { rol: { equals: 'superadmin' }, activo: { not_equals: false } }, depth: 0, limit: 200, overrideAccess: true, sort: 'nombre' }) : null,
+    mensajesDeHilo(hilo.id),
+    cmc ? usuariosCms() : null,
   ])
 
   return (
@@ -47,7 +48,7 @@ export default async function ConversacionPage({ params }: { params: Promise<{ i
             <label htmlFor="asignado">Persona de CMC asignada</label>
             <select id="asignado" name="asignado" defaultValue={idDe(hilo.asignado)}>
               <option value="">Sin asignar</option>
-              {tecnicos.docs.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+              {tecnicos.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
             </select>
           </div>
           <div className="field">
@@ -62,7 +63,7 @@ export default async function ConversacionPage({ params }: { params: Promise<{ i
       )}
 
       <ol className="hilo">
-        {(mensajes.docs as Mensaje[]).map((m) => {
+        {mensajes.map((m) => {
           const autor = m.autor as User | null
           const deCMC = autor?.rol === 'superadmin'
           return (

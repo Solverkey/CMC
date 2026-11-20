@@ -3,7 +3,6 @@ import { Icon } from '@/components/Icon'
 import { CabeceraPagina } from '@/components/web/Bloques'
 import { ContactoForm } from '@/components/web/ContactoForm'
 import { tokenFormulario } from '@/lib/consultas'
-import { payloadClient } from '@/lib/payload'
 import { leerWeb, serviciosPublicados, telefonoHref } from '@/lib/web'
 
 export const metadata: Metadata = {
@@ -14,8 +13,7 @@ export const metadata: Metadata = {
 
 export default async function Contacto({ searchParams }: { searchParams: Promise<{ servicio?: string }> }) {
   const { servicio } = await searchParams
-  const payload = await payloadClient()
-  const [web, servicios] = await Promise.all([leerWeb(payload), serviciosPublicados(payload)])
+  const [web, servicios] = await Promise.all([leerWeb(), serviciosPublicados()])
   const titulos = servicios.map((s) => s.titulo)
 
   return (
