@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { administraEmpresa } from '@/access'
 import { contexto, idDe } from '@/lib/payload'
+import { restarMeses } from '@/lib/estado'
 import { COLECCION_CLAVES, crearClave } from '@/mcp/claves'
 import type { User } from '@/payload-types'
 import { cambiarRol, enviarInvitacion, invitarUsuario, quitarAcceso } from '@/servicios/usuarios'
@@ -99,10 +100,11 @@ export async function altaEmpresa(_: Resultado, f: FormData): Promise<Resultado>
   try {
     const { req } = await comoCmc()
     const emails = campo(f, 'emails').split(/[,;\s]+/).filter(Boolean).map((email) => ({ email }))
-    const doc = await req.payload.create({
+    const razon = campo(f, 'razonSocial')
+    await req.payload.create({
       collection: 'empresas',
       data: {
-        razonSocial: campo(f, 'razonSocial'),
+        razonSocial: razon,
         cif: campo(f, 'cif'),
         direccion: campo(f, 'direccion') || undefined,
         sector: campo(f, 'sector') || undefined,
@@ -118,11 +120,67 @@ export async function altaEmpresa(_: Resultado, f: FormData): Promise<Resultado>
       req,
     })
     revalidatePath('/portal')
-    redirect(`/portal?empresa=${doc.id}`)
+    return { ok: `Empresa «${razon}» creada.` }
   } catch (e) {
     if (esRedireccion(e)) throw e
     return { error: (e as Error).message || 'No se ha podido crear la empresa.' }
   }
+}
+
+export async function guardarAvisoEmpresa(_: Resultado, f: FormData): Promise<Resultado> {
+  return ejecutar('/portal', async () => {
+    const { req } = await comoCmc()
+    const meses = campo(f, 'antelacionMeses')
+    await req.payload.update({
+      collection: 'empresas',
+      id: campo(f, 'empresa'),
+      data: { antelacionMeses: meses === '' ? null : Number(meses) },
+      user: req.user,
+      overrideAccess: false,
+      req,
+    })
+    return 'Aviso estándar del cliente actualizado.'
+  })
+}
+
+export async function guardarAntelacionCategoria(_: Resultado, f: FormData): Promise<Resultado> {
+  return ejecutar('/portal', async () => {
+    const { req } = await comoCmc()
+    const meses = campo(f, 'antelacionMeses')
+    await req.payload.update({
+      collection: 'categorias',
+      id: campo(f, 'categoria'),
+      data: { antelacionMeses: meses === '' ? null : Number(meses) },
+      user: req.user,
+      overrideAccess: false,
+      req,
+    })
+    return 'Antelación de la instalación actualizada.'
+  })
+}
+
+export async function crearSelector(_: Resultado, f: FormData): Promise<Resultado> {
+  return ejecutar('/portal/selectores', async () => {
+    const { req } = await comoCmc()
+    const tipo = campo(f, 'tipo')
+    if (!['categoria', 'documento', 'relacion'].includes(tipo)) throw new Error('Tipo no válido.')
+    await req.payload.create({
+      collection: 'catalogo',
+      data: { tipo: tipo as 'categoria' | 'documento' | 'relacion', nombre: campo(f, 'nombre'), activo: true },
+      user: req.user,
+      overrideAccess: false,
+      req,
+    })
+    return 'Opción añadida.'
+  })
+}
+
+export async function quitarSelector(_: Resultado, f: FormData): Promise<Resultado> {
+  return ejecutar('/portal/selectores', async () => {
+    const { req } = await comoCmc()
+    await req.payload.update({ collection: 'catalogo', id: campo(f, 'id'), data: { activo: false }, user: req.user, overrideAccess: false, req })
+    return 'Opción quitada del selector.'
+  })
 }
 
 export async function guardarDocumento(_: Resultado, f: FormData): Promise<Resultado> {
@@ -144,12 +202,17 @@ export async function guardarDocumento(_: Resultado, f: FormData): Promise<Resul
       gestion: (campo(f, 'gestion') || null) as 'gestionado' | 'no_gestionado' | null,
       observaciones: campo(f, 'observaciones') || null,
     }
+    const meses = campo(f, 'antelacionMeses')
+    if (meses !== '' && data.fechaCaducidad) {
+      data.fechaAviso = restarMeses(new Date(data.fechaCaducidad), Number(meses)).toISOString()
+    }
     const doc = id
       ? await req.payload.update({ collection: 'documentos', id, data, user: req.user, overrideAccess: false, req })
-      : await req.payload.create({ collection: 'documentos', data, user: req.user, overrideAccess: false, req })
+      : null
+    if (!doc) return { error: 'El documento entra al subir el archivo, no se crea vacío.' }
     revalidatePath('/portal')
     revalidatePath(`/portal/documentos/${doc.id}`)
-    redirect(`/portal/documentos/${doc.id}`)
+    return { ok: 'Documento actualizado.' }
   } catch (e) {
     if (esRedireccion(e)) throw e
     return { error: (e as Error).message || 'No se ha podido guardar el documento.' }

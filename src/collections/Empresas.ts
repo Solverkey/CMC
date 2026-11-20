@@ -89,6 +89,13 @@ export const Empresas: CollectionConfig = {
       fields: [{ name: 'email', type: 'email', required: true }],
     },
     gestionField,
+    {
+      name: 'antelacionMeses',
+      label: 'Antelación de aviso (meses)',
+      type: 'number',
+      min: 0,
+      admin: { description: 'Estándar de este cliente. Vacío = el de la plataforma. Una categoría o un documento pueden cambiarlo.' },
+    },
     { name: 'tecnico', label: 'Técnico de CMC responsable', type: 'relationship', relationTo: 'users', filterOptions: { rol: { equals: 'superadmin' } } },
     { name: 'activa', type: 'checkbox', defaultValue: true, admin: { position: 'sidebar', description: 'Baja lógica: bloquea los accesos y conserva el histórico. Se puede reactivar.' } },
     {

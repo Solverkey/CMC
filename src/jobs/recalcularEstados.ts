@@ -34,7 +34,7 @@ async function avisar(req: PayloadRequest, doc: Documento, hito: Hito) {
   }
   const base = { vars, empresa: empresa.id, documento: doc.id, idempotencia: `${hito.clave}|doc${doc.id}` }
   const enlaceCliente = `${urlServidor()}/portal/documentos/${doc.id}`
-  const enlaceCMC = `${urlServidor()}/admin/collections/documentos/${doc.id}`
+  const enlaceCMC = `${urlServidor()}/portal/documentos/${doc.id}`
   const envios: { plantilla: ClavePlantilla; para: typeof cliente; enlace: string }[] = []
 
   if (hito.tipo === 'proxima') {

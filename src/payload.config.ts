@@ -31,6 +31,7 @@ import { Web } from './globals/Web'
 import { enviarCorreo } from './jobs/enviarCorreo'
 import { recalcularEstados, resumenSemanal } from './jobs/recalcularEstados'
 import { urlPostgres } from './lib/baseDatos'
+import { asegurarSqlite } from './lib/sqliteLocal'
 import { MAX_BYTES, configS3 } from './lib/ficheros'
 import { ajustarColeccionClaves, comprobarAcceso } from './mcp/claves'
 import { herramientas } from './mcp/herramientas'
@@ -49,6 +50,7 @@ const origenes = [
   ...(process.env.CMC_ORIGENES || '').split(',').map((o) => o.trim().replace(/\/$/, '')).filter(Boolean),
 ].filter((o, i, todos) => todos.indexOf(o) === i)
 const databaseURL = urlPostgres(process.env.DATABASE_URL || 'file:./cmc.db')
+asegurarSqlite(databaseURL)
 
 // Producción: Postgres en un servidor de la UE (DATABASE_URL=postgres://…). Local: SQLite en un fichero.
 const db = /^postgres(ql)?:\/\//.test(databaseURL)

@@ -1,6 +1,7 @@
 import Link from 'next/link'
-import { LogoutButton } from '@/components/LogoutButton'
+import { CerrarCalendario } from '@/components/CerrarCalendario'
 import { NavPortal, type Enlace } from '@/components/NavPortal'
+import { PerfilPortal } from '@/components/PerfilPortal'
 import { dosFactorObligatorio, empresasDe } from '@/access'
 import { contexto } from '@/lib/payload'
 import type { Empresa, Media } from '@/payload-types'
@@ -25,18 +26,23 @@ export default async function PortalLayout({ children }: { children: React.React
   const enlaces: Enlace[] = [
     { href: '/portal', texto: cmc ? 'Panel de empresas' : 'Panel', icono: 'grid' },
     { href: '/portal/documentos', texto: 'Documentos', icono: 'search' },
-    { href: '/portal/enviar', texto: cmc ? 'Bandeja de envíos' : 'Enviar a CMC', icono: 'upload', aviso: pendientes?.totalDocs },
+    ...(cmc ? ([{ href: '/portal/enviar', texto: 'Bandeja de envíos', icono: 'upload', aviso: pendientes?.totalDocs }] as Enlace[]) : []),
     { href: '/portal/mensajes', texto: 'Comunicación con CMC', icono: 'chat', aviso: sinLeer?.totalDocs },
     { href: '/portal/avisos', texto: 'Avisos', icono: 'bell' },
-    { href: '/portal/facturacion', texto: 'Facturación', icono: 'list' },
-    ...(esAdmin ? ([{ href: '/portal/usuarios', texto: 'Usuarios', icono: 'users' }, { href: '/portal/actividad', texto: 'Registro de actividad', icono: 'list' }] as Enlace[]) : []),
+    { href: '/portal/facturacion', texto: 'Facturación', icono: 'receipt' },
+    ...(cmc ? ([{ href: '/portal/selectores', texto: 'Selectores', icono: 'select' }] as Enlace[]) : []),
+    ...(esAdmin ? ([{ href: '/portal/usuarios', texto: 'Usuarios', icono: 'users' }, { href: '/portal/actividad', texto: 'Registro de actividad', icono: 'clock' }] as Enlace[]) : []),
     ...(cmc ? ([{ href: '/portal/almacenamiento', texto: 'Almacenamiento', icono: 'database' }] as Enlace[]) : []),
+  ]
+
+  const perfil: Enlace[] = [
     { href: '/portal/asistentes', texto: 'Asistentes de IA', icono: 'key' },
     { href: '/portal/seguridad', texto: 'Seguridad', icono: 'shield' },
   ]
 
   return (
     <div className="portal">
+      <CerrarCalendario />
       <aside className="portal__side">
         <Link href="/portal" className="wordmark" style={{ paddingInline: 8 }}>
           {/* eslint-disable-next-line @next/next/no-img-element -- el logotipo puede venir de S3 */}
@@ -44,10 +50,7 @@ export default async function PortalLayout({ children }: { children: React.React
           {logo?.url && <span>Portal documental</span>}
         </Link>
         <NavPortal enlaces={enlaces} obligar2FA={obligar2FA} />
-        <div style={{ marginTop: 'auto', paddingTop: 12, borderTop: '1px solid var(--line)' }} className="stack">
-          <span className="small"><strong>{user.nombre}</strong><br /><span className="muted">{rolTexto}</span></span>
-          <LogoutButton />
-        </div>
+        <PerfilPortal nombre={user.nombre} rol={rolTexto} enlaces={perfil} />
       </aside>
       <main className="portal__main">{children}</main>
     </div>

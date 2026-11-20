@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { resolverGestion } from '@/lib/estado'
-import { contexto } from '@/lib/payload'
+import { contexto, fmt } from '@/lib/payload'
 import type { Categoria, Documento, Empresa } from '@/payload-types'
 
 export const metadata = { title: 'Facturación' }
@@ -33,23 +33,34 @@ export default async function FacturacionPage({ searchParams }: { searchParams: 
     },
   })
 
-  const porEmpresa = new Map<number, { empresa: Empresa; documentos: string[] }>()
-  for (const d of docs.docs as Documento[]) {
-    const empresa = d.empresa as Empresa
-    const cat = d.categoria as Categoria
-    if (!empresa?.activa || resolverGestion(empresa.gestion, cat?.gestion, d.gestion) !== 'gestionado') continue
-    const fila = porEmpresa.get(empresa.id) ?? { empresa, documentos: [] }
-    fila.documentos.push(d.titulo)
-    porEmpresa.set(empresa.id, fila)
+  const dentro = (fecha?: string | null) => {
+    if (!fecha) return false
+    const t = new Date(fecha).getTime()
+    return t >= inicio.getTime() && t < fin.getTime()
   }
-  const filas = [...porEmpresa.values()].sort((a, b) => a.empresa.razonSocial.localeCompare(b.empresa.razonSocial, 'es'))
+  const filas = (docs.docs as Documento[])
+    .map((d) => {
+      const empresa = d.empresa as Empresa
+      const cat = d.categoria as Categoria
+      if (!empresa?.activa || resolverGestion(empresa.gestion, cat?.gestion, d.gestion) !== 'gestionado') return null
+      const porAviso = dentro(d.fechaAviso)
+      const porCaducidad = dentro(d.fechaCaducidad)
+      if (!porAviso && !porCaducidad) return null
+      return { d, empresa, cat, porAviso, porCaducidad }
+    })
+    .filter((f) => f !== null)
+    .sort((a, b) => a.empresa.razonSocial.localeCompare(b.empresa.razonSocial, 'es') || a.d.titulo.localeCompare(b.d.titulo, 'es'))
 
   return (
     <>
       <div className="stack" style={{ gap: 4 }}>
         <p className="small muted">{cmc ? 'CMC' : user.email}</p>
-        <h1>A facturar en {etiqueta}</h1>
-        <p className="muted">Clientes con documentación gestionada por CMC que tiene un aviso o una caducidad en este mes. Es solo una consulta: no se conecta con ningún programa de facturación.</p>
+        <h1>{cmc ? `A facturar en ${etiqueta}` : `Facturación de ${etiqueta}`}</h1>
+        <p className="muted">
+          {cmc
+            ? 'Documentos gestionados por CMC con un aviso o una caducidad en este mes. Los envíos que el cliente ha mandado y todavía no están publicados no entran. Es solo una consulta: no se conecta con ningún programa de facturación.'
+            : 'Documentos que CMC gestiona y que tienen un aviso o una caducidad en este mes. No son los archivos que usted ha enviado.'}
+        </p>
       </div>
       <nav className="row" aria-label="Mes">
         <Link className="btn btn--secondary btn--sm" href={`?mes=${clave(new Date(anio, mes - 2, 1))}`}>Mes anterior</Link>
@@ -58,14 +69,27 @@ export default async function FacturacionPage({ searchParams }: { searchParams: 
       </nav>
       <div className="table-wrap">
         <table className="table">
-          <thead><tr><th>Cliente</th><th>CIF</th><th>Documentos del mes</th></tr></thead>
+          <thead>
+            <tr>
+              {cmc && <th>Cliente</th>}
+              {cmc && <th>CIF</th>}
+              <th>Documento</th>
+              <th>Categoría</th>
+              <th>En el mes</th>
+            </tr>
+          </thead>
           <tbody>
-            {filas.length === 0 && <tr><td colSpan={3} className="muted">Este mes no hay clientes a facturar.</td></tr>}
-            {filas.map(({ empresa, documentos }) => (
-              <tr key={empresa.id}>
-                <td><Link href={`/portal?empresa=${empresa.id}`}>{empresa.razonSocial}</Link></td>
-                <td>{empresa.cif}</td>
-                <td>{documentos.join(' · ')}</td>
+            {filas.length === 0 && <tr><td colSpan={cmc ? 5 : 3} className="muted">Este mes no hay documentos gestionados con aviso o caducidad.</td></tr>}
+            {filas.map(({ d, empresa, cat, porAviso, porCaducidad }) => (
+              <tr key={d.id}>
+                {cmc && <td><Link href={`/portal?empresa=${empresa.id}`}>{empresa.razonSocial}</Link></td>}
+                {cmc && <td>{empresa.cif}</td>}
+                <td><Link href={`/portal/documentos/${d.id}`}>{d.titulo}</Link></td>
+                <td>{cat?.nombre}</td>
+                <td>
+                  {porAviso && <span style={{ display: 'block' }}>Aviso {fmt(d.fechaAviso)}</span>}
+                  {porCaducidad && <span style={{ display: 'block' }}>Caducidad {fmt(d.fechaCaducidad)}</span>}
+                </td>
               </tr>
             ))}
           </tbody>

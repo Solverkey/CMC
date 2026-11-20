@@ -1,10 +1,11 @@
 import Link from 'next/link'
 import { BotonZip, MarcarTodos } from '@/components/BotonZip'
+import { EnviarCmc } from '@/components/EnviarCmc'
 import { Icon } from '@/components/Icon'
 import { StatusBadge } from '@/components/StatusBadge'
 import { ESTADOS, resolverGestion, type Estado } from '@/lib/estado'
-import { contexto, diasHasta, empresasDelUsuario, fmt } from '@/lib/payload'
-import type { Categoria, Documento, Empresa } from '@/payload-types'
+import { contexto, diasHasta, empresasDelUsuario, fmt, fmtHora } from '@/lib/payload'
+import type { Categoria, Documento, Empresa, Envio } from '@/payload-types'
 import { buscarDocumentos } from '@/servicios/documentos'
 
 export const metadata = { title: 'Documentos' }
@@ -16,13 +17,26 @@ const FILTROS: Estado[] = ['verde', 'amarillo', 'naranja', 'rojo', 'azul', 'negr
 export default async function DocumentosPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams
   const { payload, user, req, cmc } = await contexto('/portal/documentos')
-  const { empresas } = await empresasDelUsuario(user)
+  const { empresas, empresa } = await empresasDelUsuario(user, sp.empresa)
   const estados = ([] as string[]).concat(sp.estado ?? []).filter(Boolean) as Estado[]
   const pagina = Math.max(Number(sp.pagina) || 1, 1)
+  const destino = !cmc ? empresa : null
 
-  const [r, categorias] = await Promise.all([
+  const [r, categorias, categoriasEnvio, envios] = await Promise.all([
     buscarDocumentos(req, { q: sp.q, empresa: sp.empresa, categoria: sp.categoria, estados, desde: sp.desde, hasta: sp.hasta, limite: 50, pagina, orden: sp.orden || 'fechaCaducidad' }),
     sp.empresa ? payload.find({ collection: 'categorias', where: { empresa: { equals: sp.empresa } }, user, overrideAccess: false, depth: 0, limit: 500, sort: 'nombre' }) : null,
+    destino ? payload.find({ collection: 'categorias', where: { and: [{ empresa: { equals: destino.id } }, { archivada: { not_equals: true } }] }, user, overrideAccess: false, depth: 0, limit: 200, sort: 'orden' }) : null,
+    !cmc
+      ? payload.find({
+          collection: 'envios',
+          user,
+          overrideAccess: false,
+          depth: 0,
+          limit: 50,
+          sort: '-createdAt',
+          where: sp.empresa ? { empresa: { equals: sp.empresa } } : {},
+        })
+      : null,
   ])
   const docs = r.docs as Documento[]
   const enlace = (p: number) => {
@@ -39,12 +53,21 @@ export default async function DocumentosPage({ searchParams }: { searchParams: P
           <p className="small muted">{r.totalDocs} documentos</p>
           <h1>Buscar documentos</h1>
         </div>
-        {sp.empresa && (
-          <div className="row">
-            <a href={`/api/inventario/${sp.empresa}?formato=xlsx`} className="btn btn--secondary btn--sm"><Icon name="download" />Excel</a>
-            <a href={`/api/inventario/${sp.empresa}?formato=pdf`} className="btn btn--secondary btn--sm"><Icon name="download" />PDF</a>
-          </div>
-        )}
+        <div className="row">
+          {sp.empresa && (
+            <>
+              <a href={`/api/inventario/${sp.empresa}?formato=xlsx`} className="btn btn--secondary btn--sm"><Icon name="download" />Excel</a>
+              <a href={`/api/inventario/${sp.empresa}?formato=pdf`} className="btn btn--secondary btn--sm"><Icon name="download" />PDF</a>
+            </>
+          )}
+          {destino && (
+            <EnviarCmc
+              empresaId={String(destino.id)}
+              empresaNombre={destino.razonSocial}
+              categorias={(categoriasEnvio?.docs ?? []).map((c) => ({ id: String(c.id), nombre: c.nombre }))}
+            />
+          )}
+        </div>
       </div>
 
       <form className="card stack" role="search" style={{ gap: 12 }}>
@@ -146,6 +169,53 @@ export default async function DocumentosPage({ searchParams }: { searchParams: P
           <span className="small muted">Página {pagina} de {r.totalPages}</span>
           {r.hasNextPage && <Link className="btn btn--secondary btn--sm" href={enlace(pagina + 1)}>Siguiente</Link>}
         </nav>
+      )}
+
+      {!cmc && (
+        <section className="stack">
+          <div className="stack" style={{ gap: 4 }}>
+            <h2>Tus envíos</h2>
+            <p className="small muted">Lo que has mandado a CMC. Pendiente hasta que lo publique; entonces pasa al listado de documentos.</p>
+          </div>
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Envío</th>
+                  {empresas.length > 1 && <th>Empresa</th>}
+                  <th>Enviado</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(envios?.docs.length ?? 0) === 0 && <tr><td colSpan={4} className="muted">Todavía no has enviado ningún archivo.</td></tr>}
+                {(envios?.docs as Envio[] | undefined)?.map((e) => {
+                  const emp = empresas.find((x) => x.id === e.empresa)
+                  const destinoId = typeof e.documentoDestino === 'number' ? e.documentoDestino : e.documentoDestino?.id
+                  const estado = e.estado === 'publicado' ? 'verde' : e.estado === 'rechazado' ? 'rojo' : 'naranja'
+                  const etiqueta = e.estado === 'publicado' ? 'Publicado' : e.estado === 'rechazado' ? 'Rechazado' : 'Pendiente'
+                  return (
+                    <tr key={e.id}>
+                      <td>
+                        <strong>{e.titulo}</strong>
+                        <span className="muted" style={{ display: 'block' }}>{e.filename}</span>
+                        {e.estado === 'rechazado' && e.motivoRechazo && <span className="small" style={{ display: 'block' }}>{e.motivoRechazo}</span>}
+                      </td>
+                      {empresas.length > 1 && <td>{emp?.razonSocial}</td>}
+                      <td style={{ whiteSpace: 'nowrap' }}>{fmtHora(e.createdAt)}</td>
+                      <td>
+                        <span className={`status status--${estado}`}>{etiqueta}</span>
+                        {e.estado === 'publicado' && destinoId && (
+                          <Link href={`/portal/documentos/${destinoId}`} className="small" style={{ display: 'block', marginTop: 4 }}>Ver documento</Link>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
       )}
     </>
   )

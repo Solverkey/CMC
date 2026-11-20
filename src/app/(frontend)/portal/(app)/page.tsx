@@ -1,11 +1,17 @@
 import Link from 'next/link'
+import { AltaEmpresa } from '@/components/AltaEmpresa'
+import { FormAccion } from '@/components/FormAccion'
 import { Icon } from '@/components/Icon'
 import { StatusBadge } from '@/components/StatusBadge'
+import { EnviarCmc } from '@/components/EnviarCmc'
+import { SubirDocumento } from '@/components/SubirDocumento'
 import { TablaDocumentos } from '@/components/TablaDocumentos'
+import { guardarAntelacionCategoria, guardarAvisoEmpresa } from '@/app/(frontend)/portal/acciones'
 import { empresasDe } from '@/access'
-import { ESTADOS, peorEstado, type Estado } from '@/lib/estado'
+import { peorEstado, type Estado } from '@/lib/estado'
 import { conteoPorEmpresa } from '@/lib/estadisticas'
 import { contexto, empresasDelUsuario, idDe } from '@/lib/payload'
+import { leerConfiguracion } from '@/lib/configuracion'
 import type { Documento, Empresa, User } from '@/payload-types'
 
 export const metadata = { title: 'Panel' }
@@ -25,15 +31,16 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
   limite.setDate(limite.getDate() + plazo)
 
   // overrideAccess: false: el control de acceso por empresa se aplica siempre en el servidor.
-  const [docs, categorias] = await Promise.all([
+  const [docs, categorias, cfg] = await Promise.all([
     payload.find({ collection: 'documentos', user, overrideAccess: false, depth: 1, limit: 5000, where: { empresa: { equals: empresa.id } }, sort: 'fechaCaducidad' }),
     payload.find({ collection: 'categorias', user, overrideAccess: false, depth: 0, limit: 500, where: { empresa: { equals: empresa.id }, archivada: { not_equals: true } }, sort: 'orden' }),
+    leerConfiguracion(payload),
   ])
 
   const lista = docs.docs as Documento[]
   const visibles = cmc ? VISIBLES : VISIBLES.filter((e) => e !== 'azul')
   const cuenta = (e: Estado, de = lista) => de.filter((d) => d.estado === e).length
-  const proximos = lista.filter((d) => d.estado !== 'azul' && d.estado !== 'negro' && (d.estado === 'rojo' || d.estado === 'amarillo' || d.estado === 'naranja' || (d.fechaCaducidad && new Date(d.fechaCaducidad) <= limite)))
+  const proximos = lista.filter((d) => d.estado !== 'azul' && d.estado !== 'negro' && d.fechaCaducidad && new Date(d.fechaCaducidad) <= limite)
   const qs = (p: number) => `?empresa=${empresa.id}&plazo=${p}`
 
   return (
@@ -48,9 +55,14 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
           <a href={`/api/inventario/${empresa.id}?formato=xlsx`} className="btn btn--secondary btn--sm"><Icon name="download" />Inventario Excel</a>
           <a href={`/api/inventario/${empresa.id}?formato=pdf`} className="btn btn--secondary btn--sm"><Icon name="download" />Inventario PDF</a>
           {cmc ? (
-            <Link href={`/portal/documentos/nuevo?empresa=${empresa.id}`} className="btn btn--primary"><Icon name="file" />Nuevo documento</Link>
+            <SubirDocumento
+              empresaId={String(empresa.id)}
+              meses={empresa.antelacionMeses ?? cfg.antelacionMeses}
+              categorias={categorias.docs.map((c) => ({ id: String(c.id), nombre: c.nombre }))}
+              documentos={lista.map((d) => ({ id: String(d.id), titulo: d.titulo }))}
+            />
           ) : (
-            <Link href={`/portal/enviar?empresa=${empresa.id}`} className="btn btn--primary"><Icon name="upload" />Enviar documento</Link>
+            <EnviarCmc empresaId={String(empresa.id)} empresaNombre={empresa.razonSocial} categorias={categorias.docs.map((c) => ({ id: String(c.id), nombre: c.nombre }))} />
           )}
         </div>
       </div>
@@ -77,25 +89,43 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
           <TablaDocumentos docs={proximos} empresa={empresa} vacio={`Nada vence en los próximos ${plazo} días.`} />
         </section>
 
-        <aside className="card stack" style={{ flex: '1 1 300px', minWidth: 0, gap: 4 }}>
-          <h2 style={{ fontSize: 22, lineHeight: '28px', marginBottom: 8 }}>Por categoría</h2>
+        <aside className="card stack" style={{ flex: '1 1 340px', minWidth: 0, gap: 12 }}>
+          <h2 style={{ fontSize: 22, lineHeight: '28px', margin: 0 }}>Instalaciones y documentos</h2>
+          {cmc && (
+            <FormAccion accion={guardarAvisoEmpresa} className="stack" style={{ gap: 8 }}>
+              <input type="hidden" name="empresa" value={empresa.id} />
+              <div className="field">
+                <label htmlFor="antelacion-empresa">Aviso estándar del cliente (meses)</label>
+                <input className="input" id="antelacion-empresa" name="antelacionMeses" type="number" min={0} defaultValue={empresa.antelacionMeses ?? ''} placeholder={String(cfg.antelacionMeses)} />
+                <span className="hint">Vacío = {cfg.antelacionMeses} meses de la plataforma. Cada documento puede cambiarlo.</span>
+              </div>
+              <button className="btn btn--secondary btn--sm" type="submit">Guardar estándar</button>
+            </FormAccion>
+          )}
           {categorias.docs.length === 0 && <p className="muted">Sin categorías.</p>}
           {categorias.docs.map((c) => {
             const deCat = lista.filter((d) => idDe(d.categoria) === String(c.id) && visibles.includes(d.estado as Estado))
-            const peor = peorEstado(deCat.map((d) => d.estado as Estado))
-            const colores = visibles.filter((e) => e !== peor && cuenta(e, deCat) > 0).sort((a, b) => ESTADOS[b].prioridad - ESTADOS[a].prioridad)
             return (
-              <Link key={c.id} href={`/portal/documentos?empresa=${empresa.id}&categoria=${c.id}`} className="stack" style={{ gap: 6, padding: '10px 0', borderBottom: '1px solid var(--line)', textDecoration: 'none', color: 'inherit' }}>
-                <span className="row" style={{ justifyContent: 'space-between' }}>
-                  <strong>{c.nombre}</strong>
-                  {!deCat.length ? <span className="muted small">Vacía</span> : cuenta(peor, deCat) > 0 && <StatusBadge estado={peor} count={cuenta(peor, deCat)} />}
-                </span>
-                {colores.length > 0 && (
-                  <span className="row" style={{ gap: 6, justifyContent: 'flex-end' }}>
-                    {colores.map((e) => <StatusBadge key={e} estado={e} count={cuenta(e, deCat)} />)}
-                  </span>
+              <div key={c.id} className="stack" style={{ gap: 8, paddingTop: 8, borderTop: '1px solid var(--line)' }}>
+                <Link href={`/portal/documentos?empresa=${empresa.id}&categoria=${c.id}`} style={{ fontWeight: 700, textDecoration: 'none' }}>{c.nombre}</Link>
+                {cmc && (
+                  <FormAccion accion={guardarAntelacionCategoria} className="row" style={{ gap: 8, alignItems: 'end' }}>
+                    <input type="hidden" name="categoria" value={c.id} />
+                    <div className="field" style={{ flex: '1 1 120px' }}>
+                      <label className="small" htmlFor={`ant-${c.id}`}>Meses de esta instalación</label>
+                      <input className="input" id={`ant-${c.id}`} name="antelacionMeses" type="number" min={0} defaultValue={c.antelacionMeses ?? ''} placeholder={String(empresa.antelacionMeses ?? cfg.antelacionMeses)} />
+                    </div>
+                    <button className="btn btn--secondary btn--sm" type="submit">Guardar</button>
+                  </FormAccion>
                 )}
-              </Link>
+                {deCat.length === 0 && <p className="muted small">Sin documentos.</p>}
+                {deCat.map((d) => (
+                  <Link key={d.id} href={`/portal/documentos/${d.id}`} className="row" style={{ justifyContent: 'space-between', gap: 8, textDecoration: 'none', color: 'inherit' }}>
+                    <span>{d.titulo}</span>
+                    <StatusBadge estado={d.estado as Estado} />
+                  </Link>
+                ))}
+              </div>
             )
           })}
         </aside>
@@ -136,7 +166,7 @@ async function Consolidado({ empresas, cmc, user, filtro, q }: { empresas: Empre
           <p className="small muted">{cmc ? 'CMC' : `${empresas.length} empresas`}</p>
           <h1>{cmc ? 'Panel de empresas' : 'Vista consolidada'}</h1>
         </div>
-        {cmc && <Link href="/portal/empresas/nueva" className="btn btn--primary"><Icon name="building" />Alta de empresa</Link>}
+        {cmc && <AltaEmpresa />}
       </div>
 
       <section aria-label="Resumen" className="kpis">
@@ -158,34 +188,49 @@ async function Consolidado({ empresas, cmc, user, filtro, q }: { empresas: Empre
         <button className="btn btn--secondary">Filtrar</button>
       </form>
 
-      <div className="table-wrap">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Empresa</th>
-              <th>Estado</th>
-              {visibles.map((e) => <th key={e}><span className={`status status--${e}`} style={{ padding: 0, background: 'none' }} /></th>)}
-              {cmc && <th>Envíos</th>}
-              {cmc && <th>Mensajes</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {filas.length === 0 && <tr><td colSpan={visibles.length + (cmc ? 4 : 2)} className="muted">Ninguna empresa coincide.</td></tr>}
-            {filas.map(({ e, c, peor, envios, hilos }) => (
-              <tr key={e.id}>
-                <td>
-                  <Link href={`/portal?empresa=${e.id}`}>{e.razonSocial}</Link>
-                  <span className="muted" style={{ display: 'block' }}>{e.cif}{e.gestion === 'gestionado' ? ' · Gestionado por CMC' : ''}</span>
-                </td>
-                <td><StatusBadge estado={peor} /></td>
-                {visibles.map((k) => <td key={k}>{c[k] || <span className="muted">0</span>}</td>)}
-                {cmc && <td>{envios ? <Link href={`/portal/enviar?empresa=${e.id}`}>{envios}</Link> : <span className="muted">0</span>}</td>}
-                {cmc && <td>{hilos ? <Link href={`/portal/mensajes?empresa=${e.id}`}>{hilos}</Link> : <span className="muted">0</span>}</td>}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {filas.length === 0 && <p className="muted">Ninguna empresa coincide.</p>}
+      <ul className="empresas">
+        {filas.map(({ e, c, peor, envios, hilos }) => {
+          const tecnico = e.tecnico && typeof e.tecnico === 'object' ? e.tecnico.nombre : null
+          const datos: [string, string][] = [
+            ['CIF', e.cif],
+            ...(e.sector ? [['Sector', e.sector] as [string, string]] : []),
+            ...(e.direccion ? [['Dirección', e.direccion] as [string, string]] : []),
+            ...(e.contacto ? [['Contacto', e.contacto] as [string, string]] : []),
+            ['Gestión', e.gestion === 'gestionado' ? 'Gestionado por CMC' : 'No gestionado'],
+          ]
+          const colores = visibles.filter((k) => c[k] > 0)
+          return (
+            <li key={e.id} className="card empresa">
+              <Link href={`/portal?empresa=${e.id}`} className="empresa__titulo">{e.razonSocial}</Link>
+              <StatusBadge estado={peor} />
+              <dl>
+                {datos.map(([k, v]) => (
+                  <div key={k}><dt>{k}</dt><dd>{v}</dd></div>
+                ))}
+              </dl>
+              <div className="empresa__bajo">
+                {tecnico && (
+                  <dl>
+                    <div><dt>Técnico</dt><dd>{tecnico}</dd></div>
+                  </dl>
+                )}
+                {colores.length > 0 && (
+                  <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                    {colores.map((k) => <StatusBadge key={k} estado={k} count={c[k]} />)}
+                  </div>
+                )}
+                {cmc && (
+                  <div className="empresa__pie">
+                    <Link href={`/portal/enviar?empresa=${e.id}`}>{envios} envíos</Link>
+                    <Link href={`/portal/mensajes?empresa=${e.id}`}>{hilos} mensajes</Link>
+                  </div>
+                )}
+              </div>
+            </li>
+          )
+        })}
+      </ul>
     </>
   )
 }

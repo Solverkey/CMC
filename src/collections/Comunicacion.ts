@@ -7,7 +7,7 @@ import { urlServidor } from '../lib/configuracion'
 import { programarCorreo } from '../lib/correo'
 import { destinatariosCMC } from '../lib/destinatarios'
 import { dirSubidas } from '../lib/ficheros'
-import { MIME_DOCUMENTOS, comprimirImagenes, guardarOriginal, registrarDescarga } from '../lib/subidas'
+import { MIME_DOCUMENTOS, cabecerasVisor, comprimirImagenes, guardarOriginal, registrarDescarga } from '../lib/subidas'
 
 const idDe = (v: unknown) => (v && typeof v === 'object' && 'id' in v ? (v as { id: number | string }).id : (v as number | string | null | undefined))
 
@@ -150,7 +150,7 @@ export const Adjuntos: CollectionConfig = {
   labels: { singular: 'Adjunto', plural: 'Adjuntos' },
   admin: { useAsTitle: 'filename', group: 'Clientes' },
   access: { read: porEmpresa(), create: crearConAcceso, update: nadie, delete: nadie },
-  upload: { staticDir: dirSubidas('adjuntos'), mimeTypes: MIME_DOCUMENTOS, handlers: [registrarDescarga] },
+  upload: { staticDir: dirSubidas('adjuntos'), mimeTypes: MIME_DOCUMENTOS, handlers: [registrarDescarga], modifyResponseHeaders: cabecerasVisor },
   hooks: {
     beforeOperation: [comprimirImagenes],
     beforeChange: [

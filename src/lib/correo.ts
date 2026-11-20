@@ -13,6 +13,9 @@ export type Programar = {
   para: Destinatario[]
   vars: Record<string, string | number | null | undefined>
   enlace?: string
+  /** Si se indican, sustituyen el asunto y el cuerpo de la plantilla. Sirven para un cambio de estado concreto. */
+  asunto?: string
+  cuerpo?: string
   empresa?: number | string | null
   documento?: number | string | null
   hilo?: number | string | null
@@ -63,8 +66,8 @@ export async function programarCorreo(req: PayloadRequest, p: Programar) {
   if (!para.length) return []
   const cfg = await leerConfiguracion(req.payload, req)
   const t = cfg.plantilla(p.plantilla)
-  const asunto = rellenar(t.asunto, p.vars)
-  const cuerpo = rellenar(t.cuerpo, p.vars)
+  const asunto = rellenar(p.asunto || t.asunto, p.vars)
+  const cuerpo = rellenar(p.cuerpo || t.cuerpo, p.vars)
   const ids: (number | string)[] = []
 
   for (const d of para) {

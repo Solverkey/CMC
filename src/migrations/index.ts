@@ -5,6 +5,7 @@ import * as migration_20261117_130510_semaforo_manual_naranja from './20261117_1
 import * as migration_20261117_130520_semaforo_manual_azul from './20261117_130520_semaforo_manual_azul';
 import * as migration_20261117_130600_semaforo_datos from './20261117_130600_semaforo_datos';
 import * as migration_20261119_102254_esquema_pendiente from './20261119_102254_esquema_pendiente';
+import * as migration_20261120_101900_antelacion_empresa from './20261120_101900_antelacion_empresa';
 
 export const migrations = [
   {
@@ -41,5 +42,10 @@ export const migrations = [
     up: migration_20261119_102254_esquema_pendiente.up,
     down: migration_20261119_102254_esquema_pendiente.down,
     name: '20261119_102254_esquema_pendiente'
+  },
+  {
+    up: migration_20261120_101900_antelacion_empresa.up,
+    down: migration_20261120_101900_antelacion_empresa.down,
+    name: '20261120_101900_antelacion_empresa',
   },
 ];

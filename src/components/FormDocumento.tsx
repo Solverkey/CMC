@@ -47,6 +47,11 @@ export function FormDocumento({ id, empresaId, empresaNombre, categorias, valore
           <div className="field" style={{ flex: '1 1 160px' }}><label htmlFor="fechaCaducidad">Caducidad</label><input className="input" id="fechaCaducidad" name="fechaCaducidad" type="date" defaultValue={valores.fechaCaducidad} /></div>
           <div className="field" style={{ flex: '1 1 160px' }}><label htmlFor="fechaAviso">Aviso</label><input className="input" id="fechaAviso" name="fechaAviso" type="date" defaultValue={valores.fechaAviso} /></div>
         </div>
+        <div className="field">
+          <label htmlFor="antelacionMeses">Antelación propia (meses)</label>
+          <input className="input" id="antelacionMeses" name="antelacionMeses" type="number" min={0} placeholder="Usa el estándar del cliente o de la instalación" />
+          <span className="hint">Si lo rellena, esta caducidad avisa con esos meses. Vacío = el estándar.</span>
+        </div>
         <div className="row">
           <div className="field" style={{ flex: '1 1 240px' }}>
             <label htmlFor="estadoManual">Estado manual</label>

@@ -1,5 +1,5 @@
 'use client'
-import { useActionState } from 'react'
+import { useActionState, useEffect } from 'react'
 import type { Resultado } from '@/app/(frontend)/portal/acciones'
 
 type Props = {
@@ -8,11 +8,15 @@ type Props = {
   confirmar?: string
   className?: string
   style?: React.CSSProperties
+  alTerminar?: () => void
 }
 
 /** Formulario ligado a una acción del servidor, con confirmación opcional y mensaje de resultado. */
-export function FormAccion({ accion, children, confirmar, className, style }: Props) {
+export function FormAccion({ accion, children, confirmar, className, style, alTerminar }: Props) {
   const [estado, enviar, pendiente] = useActionState(accion, null)
+  useEffect(() => {
+    if (estado?.ok) alTerminar?.()
+  }, [estado, alTerminar])
   return (
     <form
       action={enviar}

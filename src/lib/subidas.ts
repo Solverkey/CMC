@@ -75,17 +75,41 @@ export const guardarOriginal: CollectionAfterChangeHook = async ({ doc, req, col
   return doc
 }
 
+/** PDF e imágenes se abren en el navegador; el botón Descargar sigue forzando la descarga. */
+export const cabecerasVisor = ({ headers }: { headers: Headers }) => {
+  const tipo = (headers.get('Content-Type') ?? '').toLowerCase()
+  if (tipo === 'application/pdf' || tipo.startsWith('image/')) headers.set('Content-Disposition', 'inline')
+  return headers
+}
+
 /** Cada acceso a un fichero queda en el registro de actividad. Devuelve vacío para que Payload sirva el fichero. */
 export const registrarDescarga = async (req: PayloadRequest, { doc, params }: { doc: TypeWithID; params: { collection: string; filename: string } }) => {
   if (!req.user) return
-  const d = doc as TypeWithID & { empresa?: unknown; filename?: string }
-  await registrar(req, {
-    accion: 'descarga',
-    descripcion: `Descarga de «${d.filename ?? params.filename}»`,
-    empresa: d.empresa as number,
-    coleccion: params.collection,
-    registroId: doc.id,
-  })
+  try {
+    // CMC tiene acceso total: Payload no adjunta el registro y, si se usa vacío, la descarga falla.
+    let registro = doc as (TypeWithID & { empresa?: unknown; filename?: string }) | undefined
+    if (!registro) {
+      const hallado = await req.payload.find({
+        collection: params.collection as 'archivos',
+        where: { filename: { equals: params.filename } },
+        limit: 1,
+        depth: 0,
+        overrideAccess: true,
+        req,
+      })
+      registro = hallado.docs[0]
+    }
+    if (!registro) return
+    await registrar(req, {
+      accion: 'descarga',
+      descripcion: `Descarga de «${registro.filename ?? params.filename}»`,
+      empresa: registro.empresa as number,
+      coleccion: params.collection,
+      registroId: registro.id,
+    })
+  } catch (err) {
+    req.payload.logger.error({ err, msg: 'No se pudo registrar la descarga' })
+  }
 }
 
 export const tamano = (n?: number | null) => {

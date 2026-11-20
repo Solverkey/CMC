@@ -3,8 +3,10 @@ import { APIError } from 'payload'
 import { nadie, porEmpresa, soloSuperAdmin } from '../access'
 import { cambios, registrar } from '../lib/actividad'
 import { usarNombre } from '../lib/catalogo'
-import { leerConfiguracion } from '../lib/configuracion'
-import { ESTADOS, calcularEstado, restarMeses, type Estado } from '../lib/estado'
+import { leerConfiguracion, urlServidor } from '../lib/configuracion'
+import { programarCorreo } from '../lib/correo'
+import { destinatariosCliente } from '../lib/destinatarios'
+import { ESTADOS, calcularEstado, resolverGestion, restarMeses, type Estado } from '../lib/estado'
 import { campoCatalogo } from './Categorias'
 import { gestionField } from './Empresas'
 
@@ -32,8 +34,9 @@ export const Documentos: CollectionConfig = {
         const catId = idDe(valor('categoria'))
         const cat = catId ? await req.payload.findByID({ collection: 'categorias', id: catId, depth: 0, overrideAccess: true, req }) : null
         if (cat && String(idDe(cat.empresa)) !== String(empresaId)) throw new APIError('La categoría elegida pertenece a otra empresa.', 400, null, true)
+        const empresa = empresaId ? await req.payload.findByID({ collection: 'empresas', id: empresaId, depth: 0, overrideAccess: true, req }) : null
 
-        // Fecha de aviso: caducidad − antelación (categoría o plataforma), salvo que se fije una fecha concreta.
+        // Fecha de aviso: caducidad − antelación. Manda el documento si se fija a mano; si no, la categoría, el estándar del cliente y, al final, la plataforma.
         const caducidad = valor('fechaCaducidad')
         const avisoCambiado = has('fechaAviso') && dia(data.fechaAviso) !== dia(originalDoc?.fechaAviso)
         const cambioCaducidad = operation === 'create' || dia(caducidad) !== dia(originalDoc?.fechaCaducidad)
@@ -43,7 +46,8 @@ export const Documentos: CollectionConfig = {
         } else if (avisoCambiado && data.fechaAviso) {
           data.avisoManual = true
         } else if (cambioCaducidad || !valor('fechaAviso')) {
-          const meses = typeof cat?.antelacionMeses === 'number' ? cat.antelacionMeses : (await leerConfiguracion(req.payload, req)).antelacionMeses
+          const cfg = await leerConfiguracion(req.payload, req)
+          const meses = typeof cat?.antelacionMeses === 'number' ? cat.antelacionMeses : typeof empresa?.antelacionMeses === 'number' ? empresa.antelacionMeses : cfg.antelacionMeses
           data.fechaAviso = restarMeses(new Date(caducidad), meses).toISOString()
           data.avisoManual = false
         }
@@ -78,6 +82,26 @@ export const Documentos: CollectionConfig = {
             registroId: doc.id,
             datos: { antes: previousDoc.estado, despues: doc.estado, manual, estadoManual: doc.estadoManual ?? null, motivo: manual ? doc.motivoEstado ?? null : 'Cálculo por fechas' },
           })
+          if (previousDoc.estado !== doc.estado && !req.context?.sinAvisos && req.context?.origen !== 'sistema' && empresa) {
+            const emp = await req.payload.findByID({ collection: 'empresas', id: empresa, depth: 0, overrideAccess: true, req })
+            const catDoc = doc.categoria ? await req.payload.findByID({ collection: 'categorias', id: idDe(doc.categoria)!, depth: 0, overrideAccess: true, req }).catch(() => null) : null
+            const gestionado = resolverGestion(emp.gestion, catDoc?.gestion, doc.gestion) === 'gestionado'
+            const antes = ESTADOS[previousDoc.estado as Estado]?.label ?? '—'
+            const despues = ESTADOS[doc.estado as Estado].label
+            await programarCorreo(req, {
+              plantilla: gestionado ? 'proxima_gestionado' : 'proxima_no_gestionado',
+              asunto: gestionado ? `«{{documento}}» pasa a ${despues} — CMC se encarga` : `«{{documento}}» pasa a ${despues} — requiere su revisión`,
+              cuerpo: gestionado
+                ? `El documento «{{documento}}» de {{empresa}} ha pasado de ${antes} a ${despues}. No necesita hacer nada: CMC lo gestiona y le avisaremos cuando el nuevo documento esté disponible.`
+                : `El documento «{{documento}}» de {{empresa}} ha pasado de ${antes} a ${despues}. Revíselo y, cuando disponga del nuevo, súbalo al portal o envíenoslo.`,
+              para: await destinatariosCliente(req, emp),
+              vars: { documento: doc.titulo, empresa: emp.razonSocial },
+              enlace: `${urlServidor()}/portal/documentos/${doc.id}`,
+              empresa: emp.id,
+              documento: doc.id,
+              idempotencia: `estado|${doc.id}|${previousDoc.estado}|${doc.estado}`,
+            })
+          }
         }
         if (Object.keys(diff).length) {
           await registrar(req, {

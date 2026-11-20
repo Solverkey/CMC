@@ -7,7 +7,7 @@ import { urlServidor } from '../lib/configuracion'
 import { programarCorreo } from '../lib/correo'
 import { destinatariosCMC, tecnicoResponsable } from '../lib/destinatarios'
 import { dirSubidas, leerFichero } from '../lib/ficheros'
-import { MIME_DOCUMENTOS, comprimirImagenes, ficheroInmutable, guardarOriginal, registrarDescarga } from '../lib/subidas'
+import { MIME_DOCUMENTOS, cabecerasVisor, comprimirImagenes, ficheroInmutable, guardarOriginal, registrarDescarga } from '../lib/subidas'
 import { campoCatalogo } from './Categorias'
 
 const idDe = (v: unknown) => (v && typeof v === 'object' && 'id' in v ? (v as { id: number | string }).id : (v as number | string | null | undefined))
@@ -28,6 +28,7 @@ export const Envios: CollectionConfig = {
     staticDir: dirSubidas('envios'),
     mimeTypes: MIME_DOCUMENTOS,
     handlers: [registrarDescarga],
+    modifyResponseHeaders: cabecerasVisor,
     hideRemoveFile: true,
   },
   hooks: {
@@ -99,7 +100,7 @@ export const Envios: CollectionConfig = {
               plantilla: 'envio_rechazado',
               para: [{ email: autor.email, usuario: autor.id, tipo: 'cliente' }],
               vars: { documento: doc.titulo, motivo: doc.motivoRechazo, empresa: empresa.razonSocial },
-              enlace: `${urlServidor()}/portal/enviar?empresa=${empresa.id}`,
+              enlace: `${urlServidor()}/portal/documentos?empresa=${empresa.id}`,
               empresa: empresa.id,
             })
           return doc

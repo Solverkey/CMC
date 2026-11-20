@@ -224,6 +224,10 @@ export interface Empresa {
    * Sin indicar hereda del nivel superior (Empresa → Categoría → Documento). Sin ningún nivel: No gestionado.
    */
   gestion?: ('gestionado' | 'no_gestionado') | null;
+  /**
+   * Estándar de este cliente. Vacío = el de la plataforma. Una categoría o un documento pueden cambiarlo.
+   */
+  antelacionMeses?: number | null;
   tecnico?: (number | null) | User;
   /**
    * Baja lógica: bloquea los accesos y conserva el histórico. Se puede reactivar.
@@ -1229,6 +1233,7 @@ export interface EmpresasSelect<T extends boolean = true> {
         id?: T;
       };
   gestion?: T;
+  antelacionMeses?: T;
   tecnico?: T;
   activa?: T;
   adminEmail?: T;

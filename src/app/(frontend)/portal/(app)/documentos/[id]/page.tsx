@@ -1,10 +1,12 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { EnviarForm } from '@/components/EnviarForm'
+import { EditarDocumento } from '@/components/EditarDocumento'
 import { VisorArchivo } from '@/components/VisorArchivo'
 import { Icon } from '@/components/Icon'
 import { StatusBadge } from '@/components/StatusBadge'
+import { SubirDocumento } from '@/components/SubirDocumento'
 import { resolverGestion, type Estado } from '@/lib/estado'
+import { leerConfiguracion } from '@/lib/configuracion'
 import { tamano } from '@/lib/subidas'
 import { contexto, fmt, fmtHora, idDe } from '@/lib/payload'
 import type { Archivo, Categoria, Empresa, User } from '@/payload-types'
@@ -17,15 +19,18 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
 
   const empresa = doc.empresa as Empresa
   const categoria = doc.categoria as Categoria
-  const [archivos, hilos] = await Promise.all([
+  const [archivos, hilos, categorias] = await Promise.all([
     payload.find({ collection: 'archivos', user, overrideAccess: false, depth: 1, limit: 200, sort: '-createdAt', where: { documento: { equals: doc.id } } }),
     payload.find({ collection: 'hilos', user, overrideAccess: false, depth: 0, limit: 50, sort: '-ultimoMensaje', where: { documento: { equals: doc.id } } }),
+    payload.find({ collection: 'categorias', where: { and: [{ empresa: { equals: empresa.id } }, { archivada: { not_equals: true } }] }, depth: 0, limit: 200, sort: 'orden', overrideAccess: true }),
   ])
   const vigenteId = idDe(doc.archivoVigente)
   // Un anexo (complementario) nunca es el vigente; si el documento no lo tiene fijado, el último que sustituye.
   const vigente = archivos.docs.find((a) => String(a.id) === vigenteId) ?? archivos.docs.find((a) => !a.historico && a.efectos?.includes('sustituye'))
   const gestion = resolverGestion(empresa?.gestion, categoria?.gestion, doc.gestion)
   const tecnico = [doc.tecnico, categoria?.responsable, empresa?.tecnico].find((t) => t && typeof t === 'object') as User | undefined
+  const cfg = await leerConfiguracion(payload)
+  const mesesAviso = typeof categoria?.antelacionMeses === 'number' ? categoria.antelacionMeses : typeof empresa?.antelacionMeses === 'number' ? empresa.antelacionMeses : cfg.antelacionMeses
 
   return (
     <>
@@ -58,8 +63,28 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
         </div>
         <div className="row">
           {vigente?.url && <a href={vigente.url} className="btn btn--primary" download><Icon name="download" />Descargar</a>}
-          <Link href={`/portal/mensajes/nuevo?empresa=${empresa.id}&documento=${doc.id}`} className="btn btn--secondary"><Icon name="chat" />Preguntar a CMC</Link>
-          {cmc && <Link href={`/portal/documentos/${doc.id}/editar`} className="btn btn--secondary"><Icon name="settings" />Editar</Link>}
+          {!cmc && <Link href={`/portal/mensajes/nuevo?empresa=${empresa.id}&documento=${doc.id}`} className="btn btn--secondary"><Icon name="chat" />Preguntar a CMC</Link>}
+          {cmc && (
+            <EditarDocumento
+              id={String(doc.id)}
+              empresaId={String(empresa.id)}
+              categorias={categorias.docs.map((c) => ({ id: String(c.id), nombre: c.nombre }))}
+              valores={{
+                titulo: doc.titulo,
+                categoria: String(idDe(doc.categoria)),
+                referencia: doc.referencia ?? '',
+                organismo: doc.organismo ?? '',
+                fechaEmision: doc.fechaEmision?.slice(0, 10) ?? '',
+                fechaCaducidad: doc.fechaCaducidad?.slice(0, 10) ?? '',
+                fechaAviso: doc.fechaAviso?.slice(0, 10) ?? '',
+                estadoManual: doc.estadoManual ?? '',
+                motivoEstado: doc.motivoEstado ?? '',
+                limiteSubsanacion: doc.limiteSubsanacion?.slice(0, 10) ?? '',
+                gestion: doc.gestion ?? '',
+                observaciones: doc.observaciones ?? '',
+              }}
+            />
+          )}
         </div>
       </div>
 
@@ -79,17 +104,21 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
             {doc.observaciones && <p className="small">{doc.observaciones}</p>}
           </section>
 
-          {vigente && (
-            <section className="card stack">
-              <h2 style={{ fontSize: 22, lineHeight: '28px' }}>Archivo vigente</h2>
-              <div className="file">
-                <Icon name="file" />
-                <span className="file__name">{vigente.filename}</span>
-                <span className="muted">{vigente.relacion} · {tamano(vigente.filesize)}</span>
-              </div>
-              {vigente.url && <VisorArchivo url={vigente.url} nombre={vigente.filename ?? 'documento'} mime={vigente.mimeType} />}
-            </section>
-          )}
+          <section className="card stack">
+            <h2 style={{ fontSize: 22, lineHeight: '28px' }}>Archivo</h2>
+            {vigente ? (
+              <>
+                <div className="file">
+                  <Icon name="file" />
+                  <span className="file__name">{vigente.filename}</span>
+                  <span className="muted">{vigente.relacion} · {tamano(vigente.filesize)}</span>
+                </div>
+                {vigente.url && <VisorArchivo url={vigente.url} nombre={vigente.filename ?? 'documento'} mime={vigente.mimeType} />}
+              </>
+            ) : (
+              <p className="muted">Este documento todavía no tiene archivo. La previsualización aparece cuando CMC publica el PDF en esta ficha.</p>
+            )}
+          </section>
 
           <section className="card stack">
             <div className="row" style={{ justifyContent: 'space-between' }}>
@@ -107,10 +136,11 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
             ))}
           </section>
 
-          {!cmc && (
+          {cmc && (
             <section className="card stack">
-              <h2 style={{ fontSize: 22, lineHeight: '28px' }}>Enviar archivo a CMC</h2>
-              <EnviarForm empresaId={String(empresa.id)} documentoId={String(doc.id)} tituloPorDefecto={doc.titulo} categoriaId={categoria?.id ? String(categoria.id) : undefined} />
+              <h2 style={{ fontSize: 22, lineHeight: '28px' }}>Añadir archivo</h2>
+              <p className="muted">Renovación, subsanación o anexo. El archivo queda en el histórico y no se borra.</p>
+              <SubirDocumento empresaId={String(empresa.id)} documentoId={String(doc.id)} meses={mesesAviso} variante="ficha" />
             </section>
           )}
         </div>

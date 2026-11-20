@@ -3,19 +3,22 @@ import { useRef, useState } from 'react'
 import { Combobox } from './Combobox'
 import { Icon } from './Icon'
 
-type Props = { empresaId: string; documentoId?: string; tituloPorDefecto?: string; categoriaId?: string; categorias?: { id: string; nombre: string }[] }
+type Props = { empresaId: string; documentoId?: string; tituloPorDefecto?: string; categoriaId?: string; categorias?: { id: string; nombre: string }[]; alEnviar?: () => void }
 type Item = { file: File; estado: 'pendiente' | 'subiendo' | 'ok' | 'error'; msg?: string }
 
 const kb = (n: number) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1).replace('.', ',')} MB` : `${Math.round(n / 1024)} KB`)
 const MAX = 50 * 1024 * 1024
 
 /** Envío de documentos a la bandeja de revisión de CMC (RF-25) con subida múltiple (RF-08). */
-export function EnviarForm({ empresaId, documentoId, tituloPorDefecto, categoriaId, categorias = [] }: Props) {
+export function EnviarForm({ empresaId, documentoId, tituloPorDefecto, categoriaId, categorias = [], alEnviar }: Props) {
   const input = useRef<HTMLInputElement>(null)
   const [items, setItems] = useState<Item[]>([])
   const [activa, setActiva] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [categoria, setCategoria] = useState(categoriaId ?? '')
+  const [fase, setFase] = useState<'formulario' | 'cargando' | 'listo'>('formulario')
+  const [progreso, setProgreso] = useState(0)
+  const [clave, setClave] = useState(0)
 
   const añadir = (files: FileList | null) => {
     if (!files) return
@@ -28,7 +31,13 @@ export function EnviarForm({ empresaId, documentoId, tituloPorDefecto, categoria
   async function enviar(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const form = new FormData(e.currentTarget)
+    const inicio = Date.now()
     setEnviando(true)
+    setFase('cargando')
+    setProgreso(8)
+    const reloj = window.setInterval(() => setProgreso((p) => (p < 90 ? p + 6 : p)), 160)
+    let alguno = false
+    let fallo = false
     for (let i = 0; i < items.length; i++) {
       if (items[i].estado !== 'pendiente') continue
       setItems((p) => p.map((it, j) => (j === i ? { ...it, estado: 'subiendo' } : it)))
@@ -38,8 +47,8 @@ export function EnviarForm({ empresaId, documentoId, tituloPorDefecto, categoria
         '_payload',
         JSON.stringify({
           titulo: form.get('titulo') || items[i].file.name,
-          empresa: empresaId,
-          documentoRelacionado: documentoId,
+          empresa: Number(empresaId),
+          ...(documentoId ? { documentoRelacionado: Number(documentoId) } : {}),
           relacion: form.get('relacion') || 'Renovación',
           nuevaCaducidad: form.get('caducidad') || undefined,
           comentario: form.get('comentario') || undefined,
@@ -50,14 +59,54 @@ export function EnviarForm({ empresaId, documentoId, tituloPorDefecto, categoria
       const json = await res.json().catch(() => null)
       const doc = json?.doc as { filesize?: number; tamanoOriginal?: number } | undefined
       const comprimido = ok && doc?.filesize && doc.tamanoOriginal && doc.filesize < doc.tamanoOriginal ? ` · optimizada de ${kb(doc.tamanoOriginal)} a ${kb(doc.filesize)}` : ''
+      if (ok) alguno = true
+      else fallo = true
       const msg = ok ? `Enviado a CMC para revisión${comprimido}` : (json?.errors?.[0]?.message ?? 'Error al enviar')
       setItems((p) => p.map((it, j) => (j === i ? { ...it, estado: ok ? 'ok' : 'error', msg } : it)))
     }
+    window.clearInterval(reloj)
     setEnviando(false)
+    if (!alguno || fallo) {
+      setFase('formulario')
+      setProgreso(0)
+      return
+    }
+    const espera = Math.max(0, 700 - (Date.now() - inicio))
+    window.setTimeout(() => {
+      setProgreso(100)
+      window.setTimeout(() => {
+        setFase('listo')
+        alEnviar?.()
+        window.setTimeout(() => {
+          setItems([])
+          setCategoria(categoriaId ?? '')
+          setClave((n) => n + 1)
+          setProgreso(0)
+          setFase('formulario')
+        }, 1400)
+      }, 450)
+    }, espera)
   }
 
   return (
     <form className="stack" onSubmit={enviar}>
+      {fase !== 'formulario' ? (
+        <div className="envio-espera" role="status">
+          {fase === 'cargando' ? (
+            <>
+              <p style={{ margin: 0 }}>Enviando a CMC…</p>
+              <div className="envio-barra" aria-hidden="true"><span style={{ width: `${progreso}%` }} /></div>
+            </>
+          ) : (
+            <>
+              <span className="envio-ok__tick"><Icon name="check" size={48} /></span>
+              <strong>Enviado a CMC</strong>
+              <p className="muted" style={{ margin: 0 }}>Lo revisaremos y le avisaremos por correo.</p>
+            </>
+          )}
+        </div>
+      ) : (
+        <div key={clave} className="stack">
       <div className="row" style={{ gap: 16, alignItems: 'stretch' }}>
         <div className="field" style={{ flex: '1 1 220px' }}>
           <label htmlFor="titulo">Nombre del documento</label>
@@ -106,8 +155,6 @@ export function EnviarForm({ empresaId, documentoId, tituloPorDefecto, categoria
           <Icon name="file" />
           <span className="file__name">{it.file.name}</span>
           <span className="muted">{kb(it.file.size)}</span>
-          {it.estado === 'subiendo' && <span className="muted">Subiendo…</span>}
-          {it.estado === 'ok' && <span className="status status--verde">{it.msg}</span>}
           {it.estado === 'error' && <span className="status status--rojo">{it.msg}</span>}
           {it.estado === 'pendiente' && (
             <button type="button" className="enlace" aria-label={`Quitar ${it.file.name}`} onClick={() => setItems((p) => p.filter((_, j) => j !== i))}>
@@ -118,6 +165,8 @@ export function EnviarForm({ empresaId, documentoId, tituloPorDefecto, categoria
       ))}
 
       <div><button className="btn btn--primary" type="submit" disabled={enviando || !items.some((i) => i.estado === 'pendiente')}>{enviando ? 'Enviando…' : 'Enviar a revisión'}</button></div>
+        </div>
+      )}
     </form>
   )
 }
