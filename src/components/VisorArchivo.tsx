@@ -43,7 +43,14 @@ function VisorPdf({ url, nombre }: { url: string; nombre: string }) {
       const res = await fetch(urlDelSitio(url), { credentials: 'include' })
       if (!res.ok) throw new Error('No se ha podido leer el archivo.')
       const datos = new Uint8Array(await res.arrayBuffer())
-      const doc = await pdfjs.getDocument({ data: datos }).promise
+      const doc = await pdfjs.getDocument({
+        data: datos,
+        wasmUrl: '/pdfjs/wasm/',
+        cMapUrl: '/pdfjs/cmaps/',
+        cMapPacked: true,
+        standardFontDataUrl: '/pdfjs/standard_fonts/',
+        disableWorkerRendering: true,
+      }).promise
       if (!vivo) return
       nodo.replaceChildren()
       const ancho = nodo.clientWidth || 640
@@ -62,8 +69,7 @@ function VisorPdf({ url, nombre }: { url: string; nombre: string }) {
         nodo.appendChild(canvas)
         const ctx = canvas.getContext('2d')
         if (!ctx) continue
-        ctx.setTransform(ratio, 0, 0, ratio, 0, 0)
-        const render = page.render({ canvasContext: ctx, canvas, viewport })
+        const render = page.render({ canvasContext: ctx, viewport, transform: ratio === 1 ? null : [ratio, 0, 0, ratio, 0, 0] })
         pendientes.push(render)
         await render.promise
       }
