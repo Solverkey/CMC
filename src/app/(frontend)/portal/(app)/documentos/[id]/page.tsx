@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { BotonDescarga } from '@/components/BotonDescarga'
 import { EditarDocumento } from '@/components/EditarDocumento'
 import { VisorArchivo } from '@/components/VisorArchivo'
 import { Icon } from '@/components/Icon'
@@ -62,7 +63,7 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
           )}
         </div>
         <div className="row">
-          {vigente?.url && <a href={vigente.url} className="btn btn--primary" download><Icon name="download" />Descargar</a>}
+          {vigente?.url && <BotonDescarga url={vigente.url} nombre={vigente.filename} className="btn btn--primary"><Icon name="download" />Descargar</BotonDescarga>}
           {!cmc && <Link href={`/portal/mensajes/nuevo?empresa=${empresa.id}&documento=${doc.id}`} className="btn btn--secondary"><Icon name="chat" />Preguntar a CMC</Link>}
           {cmc && (
             <EditarDocumento
@@ -120,22 +121,6 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
             )}
           </section>
 
-          <section className="card stack">
-            <div className="row" style={{ justifyContent: 'space-between' }}>
-              <h2 style={{ fontSize: 22, lineHeight: '28px' }}>Conversaciones sobre este documento</h2>
-              {hilos.length > 0 && <a className="small" href={`/api/comunicaciones/${empresa.id}?documento=${doc.id}`}>Exportar historial (PDF)</a>}
-            </div>
-            {hilos.length === 0 && <p className="muted">Ninguna todavía.</p>}
-            {hilos.map((h) => (
-              <Link key={h.id} href={`/portal/mensajes/${h.id}`} className="file" style={{ textDecoration: 'none', color: 'inherit' }}>
-                <Icon name="chat" />
-                <span className="file__name">{h.asunto}</span>
-                <span className="muted">{fmtHora(h.ultimoMensaje)}</span>
-                <span className={`status status--${h.estado === 'resuelto' ? 'verde' : 'naranja'}`}>{h.estado === 'resuelto' ? 'Resuelto' : 'Abierto'}</span>
-              </Link>
-            ))}
-          </section>
-
           {cmc && (
             <section className="card stack">
               <h2 style={{ fontSize: 22, lineHeight: '28px' }}>Añadir archivo</h2>
@@ -145,7 +130,23 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
           )}
         </div>
 
-        <aside className="card stack" style={{ flex: '1 1 320px', minWidth: 0 }}>
+        <aside className="stack" style={{ flex: '1 1 320px', minWidth: 0 }}>
+          <section className="card stack">
+            <div className="row" style={{ justifyContent: 'space-between' }}>
+              <h2 style={{ fontSize: 22, lineHeight: '28px' }}>Conversaciones</h2>
+              {hilos.length > 0 && <a className="small" href={`/api/comunicaciones/${empresa.id}?documento=${doc.id}`}>Exportar</a>}
+            </div>
+            {hilos.length === 0 && <p className="muted">Ninguna sobre este documento.</p>}
+            {hilos.map((h) => (
+              <Link key={h.id} href={`/portal/mensajes/${h.id}`} className="file" style={{ textDecoration: 'none', color: 'inherit' }}>
+                <Icon name="chat" />
+                <span className="file__name">{h.asunto}</span>
+                <span className="muted">{fmtHora(h.ultimoMensaje)}</span>
+                <span className={`status status--${h.estado === 'resuelto' ? 'verde' : 'naranja'}`}>{h.estado === 'resuelto' ? 'Resuelto' : 'Abierto'}</span>
+              </Link>
+            ))}
+          </section>
+          <section className="card stack">
           <h2 style={{ fontSize: 22, lineHeight: '28px' }}>Histórico</h2>
           <ol className="timeline">
             {archivos.length === 0 && <li className="muted">Sin archivos todavía.</li>}
@@ -161,6 +162,7 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
               </li>
             ))}
           </ol>
+          </section>
         </aside>
       </div>
     </>

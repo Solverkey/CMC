@@ -5,7 +5,7 @@ import { sugerir } from '@/lib/catalogo'
 import { firmar, igualSeguro } from '@/lib/cifrado'
 import type { Ctx } from '@/lib/ctx'
 import { ahora, ejecutar } from '@/lib/db'
-import { leerFichero } from '@/lib/ficheros'
+import { leerFichero, tipoPorNombre } from '@/lib/ficheros'
 import { verificarPassword } from '@/lib/clave'
 import { leerSesion, escribirSesion, borrarSesion } from '@/lib/sesion'
 import { anotarFallo, guardarPassword, usuarioPorEmail } from '@/datos/usuarios'
@@ -122,8 +122,17 @@ async function atender(req: Request, slug: string[]) {
   if (req.method === 'POST' && ruta === 'oauth/revocar') return revocar(req)
 
   if (req.method === 'GET' && slug[0] === 'ficheros' && slug.length === 3) {
-    const data = await leerFichero(slug[1], { filename: decodeURIComponent(slug[2]) })
-    return new Response(new Uint8Array(data), { headers: { 'Cache-Control': 'private, max-age=60' } })
+    const nombre = decodeURIComponent(slug[2])
+    const data = await leerFichero(slug[1], { filename: nombre })
+    const headers: Record<string, string> = {
+      'Content-Type': tipoPorNombre(nombre),
+      'Cache-Control': 'private, max-age=60',
+    }
+    if (new URL(req.url).searchParams.get('descarga') === '1') {
+      const seguro = nombre.replace(/[\r\n"]/g, '')
+      headers['Content-Disposition'] = `attachment; filename="${seguro}"`
+    }
+    return new Response(new Uint8Array(data), { headers })
   }
 
   if (req.method === 'GET' && ruta.startsWith('correos/') && ruta.endsWith('/abierto')) {

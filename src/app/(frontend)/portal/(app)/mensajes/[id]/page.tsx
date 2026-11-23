@@ -7,7 +7,7 @@ import { Icon } from '@/components/Icon'
 import { MensajeForm } from '@/components/MensajeForm'
 import { tamano } from '@/lib/subidas'
 import { hiloPorId, mensajesDeHilo, usuariosCms } from '@/datos/consultas'
-import type { Adjunto, Documento, Empresa, Hilo, Mensaje, User } from '@/datos/tipos'
+import type { Adjunto, Empresa, User } from '@/datos/tipos'
 import { contexto, fmtHora, idDe } from '@/lib/payload'
 
 export default async function ConversacionPage({ params }: { params: Promise<{ id: string }> }) {
@@ -17,7 +17,7 @@ export default async function ConversacionPage({ params }: { params: Promise<{ i
   if (!hilo) notFound()
 
   const empresa = hilo.empresa as Empresa
-  const doc = hilo.documento as Documento | null
+  const doc = typeof hilo.documento === 'object' && hilo.documento ? hilo.documento : null
   const [mensajes, tecnicos] = await Promise.all([
     mensajesDeHilo(hilo.id),
     cmc ? usuariosCms() : null,

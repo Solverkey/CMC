@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
+import { BotonDescarga } from '@/components/BotonDescarga'
 import { FormAccion } from '@/components/FormAccion'
 import { VisorArchivo } from '@/components/VisorArchivo'
 import { resolverEnvio } from '@/app/(frontend)/portal/acciones'
@@ -83,7 +84,7 @@ export default async function RevisarEnvio({ params }: { params: Promise<{ id: s
           <aside className="revision__archivo stack">
             <div className="row" style={{ justifyContent: 'space-between' }}>
               <h2>Archivo</h2>
-              <a className="btn btn--secondary btn--sm" href={envio.url} download={envio.filename ?? undefined}>Descargar</a>
+              <BotonDescarga className="btn btn--secondary btn--sm" url={envio.url} nombre={envio.filename}>Descargar</BotonDescarga>
             </div>
             <VisorArchivo url={envio.url} nombre={envio.filename ?? envio.titulo} mime={envio.mimeType} />
           </aside>

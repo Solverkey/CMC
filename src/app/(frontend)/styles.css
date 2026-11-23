@@ -240,6 +240,16 @@ html { scroll-behavior: smooth; }
 .trampa { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 [aria-invalid="true"] { border-color: var(--status-expired) !important; }
 .visor { width: 100%; height: 720px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-sunken); }
+.visor--pdf { overflow: auto; background: #fff; }
+.visor--pdf canvas { display: block; width: 100%; height: auto; }
+.visor--office { overflow: auto; background: #fff; padding: 16px; }
+.visor--office .docx-wrapper { background: #fff; padding: 0; }
+.visor--office .docx-wrapper > section.docx { box-shadow: none; margin: 0 auto 16px; }
+.visor--office .hojas { display: flex; gap: 8px; position: sticky; top: 0; background: #fff; padding-bottom: 12px; }
+.visor--office .hojas button { border: 1px solid var(--line); background: var(--surface-sunken); border-radius: var(--radius-sm); padding: 4px 10px; cursor: pointer; }
+.visor--office .hojas button.is-active { background: var(--slate); color: #fff; border-color: var(--slate); }
+.visor--office table { border-collapse: collapse; width: max-content; min-width: 100%; font-size: 13px; }
+.visor--office td { border: 1px solid var(--line); padding: 4px 8px; vertical-align: top; white-space: pre-wrap; }
 img.visor { height: auto; max-height: 720px; object-fit: contain; }
 .revision { display: grid; grid-template-columns: minmax(320px, 560px) auto minmax(0, 1fr); column-gap: var(--space-6); align-items: start; }
 .revision .field { min-width: 0; }

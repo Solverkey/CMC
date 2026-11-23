@@ -41,7 +41,7 @@ Todo se activa por variables de entorno (ver `.env.example`):
 | Pieza | Variable | Qué hace |
 |---|---|---|
 | Base de datos | `DATABASE_URL=postgres://…` | Postgres en un servidor de la UE. Al arrancar se aplican las migraciones de `src/migrations`. |
-| Archivos | `S3_BUCKET`, `S3_REGION`… | S3 (o compatible) en la UE, privado, con enlaces de descarga temporales. |
+| Archivos | `S3_BUCKET`, `S3_ENDPOINT`… | Cubo privado de Supabase Storage. El portal lee el fichero y lo muestra; la descarga va en el botón. |
 | Correo | `SMTP_HOST`, `EMAIL_FROM`… | Envío por SMTP con el dominio de CMC (configure SPF, DKIM y DMARC en el DNS). |
 | Seguimiento de correo | `EMAIL_WEBHOOK_SECRET` | Webhook `/api/correos/eventos` para entregado, abierto y rebotado. |
 | Dirección pública | `NEXT_PUBLIC_SERVER_URL` | Enlaces de los correos y OAuth del servidor MCP. |

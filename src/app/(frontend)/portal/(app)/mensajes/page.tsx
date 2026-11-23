@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { listarHilos } from '@/datos/consultas'
-import type { Documento, Empresa, Hilo, User } from '@/datos/tipos'
+import type { Empresa } from '@/datos/tipos'
 import { Icon } from '@/components/Icon'
 import { contexto, empresasDelUsuario, fmtHora } from '@/lib/payload'
 
@@ -74,8 +74,8 @@ export default async function MensajesPage({ searchParams }: { searchParams: Pro
               <tr key={h.id}>
                 <td><Link href={`/portal/mensajes/${h.id}`}>{h.asunto}</Link></td>
                 {(cmc || empresas.length > 1) && <td>{(h.empresa as Empresa)?.razonSocial}</td>}
-                <td className="muted">{(h.documento as Documento)?.titulo ?? (typeof h.categoria === 'object' && h.categoria ? h.categoria.nombre : 'General')}</td>
-                <td>{(h.asignado as User)?.nombre ?? <span className="muted">Sin asignar</span>}</td>
+                <td className="muted">{typeof h.documento === 'object' && h.documento ? h.documento.titulo : typeof h.categoria === 'object' && h.categoria ? h.categoria.nombre : 'General'}</td>
+                <td>{typeof h.asignado === 'object' && h.asignado ? h.asignado.nombre : <span className="muted">Sin asignar</span>}</td>
                 <td>{fmtHora(h.ultimoMensaje)}</td>
                 <td><span className={`status status--${h.estado === 'resuelto' ? 'verde' : 'naranja'}`}>{h.estado === 'resuelto' ? 'Resuelto' : 'Abierto'}</span></td>
               </tr>

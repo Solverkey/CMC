@@ -2,7 +2,7 @@ import { empresasDe, esSuperAdmin } from '@/access'
 import type { Archivo, Categoria, Documento, Empresa, Envio, Hilo, Mensaje, User } from './tipos'
 import { filas, uno } from '@/lib/db'
 import { urlDe } from '@/lib/ficheros'
-import { mapActividad, mapArchivo, mapCategoria, mapCorreo, mapDocumento, mapEmpresa, mapEnvio, mapHilo, mapMensaje, visible } from './mapas'
+import { mapActividad, mapArchivo, mapCategoria, mapCorreo, mapDocumento, mapEmpresa, mapEnvio, mapHilo, mapMensaje, mapUser, visible } from './mapas'
 
 type Fila = Record<string, unknown>
 
@@ -20,6 +20,36 @@ async function empresas(lista: number[]) {
     por.set(Number(a.padre), l)
   }
   return new Map(rows.map((r) => [Number(r.id), mapEmpresa(r, por.get(Number(r.id)) ?? [])]))
+}
+
+async function personas(lista: number[]) {
+  const unicos = ids(lista)
+  if (!unicos.length) return new Map<number, User>()
+  const rows = await filas<Fila>(`SELECT id, nombre, email, rol, recibe_avisos, activo, totp_activo, updated_at, created_at FROM users WHERE id IN (${unicos.join(',')})`)
+  return new Map(rows.map((r) => [Number(r.id), mapUser(r)]))
+}
+
+async function documentosDe(lista: number[]) {
+  const unicos = ids(lista)
+  if (!unicos.length) return new Map<number, Documento>()
+  const rows = await filas<Fila>(`SELECT * FROM documentos WHERE id IN (${unicos.join(',')})`)
+  return new Map(rows.map((r) => [Number(r.id), mapDocumento(r)]))
+}
+
+async function completarHilos(hilos: Hilo[]) {
+  const [emps, cats, docs, gente] = await Promise.all([
+    empresas(hilos.map((h) => Number(h.empresa))),
+    categorias(hilos.map((h) => Number(h.categoria))),
+    documentosDe(hilos.map((h) => Number(h.documento))),
+    personas(hilos.map((h) => Number(h.asignado))),
+  ])
+  return hilos.map((h) => ({
+    ...h,
+    empresa: emps.get(Number(h.empresa)) ?? h.empresa,
+    categoria: typeof h.categoria === 'number' ? (cats.get(h.categoria) ?? h.categoria) : h.categoria,
+    documento: typeof h.documento === 'number' ? (docs.get(h.documento) ?? null) : h.documento,
+    asignado: typeof h.asignado === 'number' ? (gente.get(h.asignado) ?? null) : h.asignado,
+  }))
 }
 
 async function categorias(lista: number[]) {
@@ -131,20 +161,15 @@ export async function categoriasDeEmpresa(empresaId: number | string, { archivad
 
 export async function listarHilos(user: User | null, sqlExtra: string, params: unknown[] = []) {
   const rows = await filas<Fila>(`SELECT * FROM hilos WHERE ${visible(user, 'empresa_id')} ${sqlExtra}`, params)
-  const emps = await empresas(rows.map((r) => Number(r.empresa_id)))
-  return rows.map((r) => {
-    const h = mapHilo(r)
-    return { ...h, empresa: emps.get(Number(h.empresa)) ?? h.empresa }
-  })
+  return completarHilos(rows.map(mapHilo))
 }
 
 export async function hiloPorId(id: number | string, user?: User | null): Promise<Hilo | null> {
   const filtro = user ? `AND ${visible(user, 'empresa_id')}` : ''
   const row = await uno<Fila>(`SELECT * FROM hilos WHERE id = $1 ${filtro}`, [Number(id)])
   if (!row) return null
-  const emps = await empresas([Number(row.empresa_id)])
-  const h = mapHilo(row)
-  return { ...h, empresa: emps.get(Number(h.empresa)) ?? h.empresa }
+  const [hilo] = await completarHilos([mapHilo(row)])
+  return hilo ?? null
 }
 
 export async function mensajesDeHilo(hiloId: number | string) {
@@ -163,9 +188,11 @@ export async function mensajesDeHilo(hiloId: number | string) {
     l.push(Number(r.adjuntos_id))
     porMensaje.set(Number(r.parent_id), l)
   }
+  const autores = await personas(rows.map((r) => Number(r.autor_id)))
   return rows.map((r) => {
     const m = mapMensaje(r)
     m.adjuntos = (porMensaje.get(m.id) ?? []).map((id) => porAdj.get(id) ?? id)
+    m.autor = typeof m.autor === 'number' ? (autores.get(m.autor) ?? null) : m.autor
     return m
   }) as Mensaje[]
 }
