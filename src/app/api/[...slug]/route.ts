@@ -199,7 +199,9 @@ async function atender(req: Request, slug: string[]) {
   if (req.method === 'POST' && ruta === 'adjuntos') {
     exigir(ctx)
     const f = await formulario(req)
-    const a = await subirAdjunto(ctx, String(f.get('empresa') ?? ''), await ficheroDe(f.get('file')))
+    const meta = JSON.parse(String(f.get('_payload') ?? '{}')) as { empresa?: string | number }
+    const empresa = String(f.get('empresa') ?? meta.empresa ?? '')
+    const a = await subirAdjunto(ctx, empresa, await ficheroDe(f.get('file')))
     return json({ doc: a })
   }
 
