@@ -138,8 +138,13 @@ p { margin: 0; }
 .kpi--negro { background: var(--status-na-soft); color: var(--status-na); }
 .kpi--envio { background: var(--slate-soft); color: var(--slate-deep); }
 .kpi:hover { filter: brightness(.97); }
-.timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 20px; }
-.timeline li { display: flex; gap: var(--space-3); font-size: 14px; line-height: 20px; }
+.timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.timeline li { display: flex; gap: var(--space-3); font-size: 14px; line-height: 20px; min-width: 0; }
+.timeline li > div { min-width: 0; flex: 1; }
+.timeline a { overflow-wrap: anywhere; }
+.timeline--pasado { opacity: 0.5; }
+.timeline--pasado strong { font-weight: 500; }
+.timeline--vigente a { font-weight: 700; }
 .timeline .dot { flex: 0 0 12px; height: 12px; margin-top: 4px; border-radius: var(--radius-full); background: var(--slate); }
 .timeline .dot--negro { background: var(--status-na); }
 .timeline .dot--azul { background: var(--status-archive); }

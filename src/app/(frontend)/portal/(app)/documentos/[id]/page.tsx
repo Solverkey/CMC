@@ -150,8 +150,10 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
           <h2 style={{ fontSize: 22, lineHeight: '28px' }}>Histórico</h2>
           <ol className="timeline">
             {archivos.length === 0 && <li className="muted">Sin archivos todavía.</li>}
-            {archivos.map((a: Archivo) => (
-              <li key={a.id}>
+            {archivos.map((a: Archivo) => {
+              const esVigente = a.id === vigente?.id
+              return (
+              <li key={a.id} className={esVigente ? 'timeline--vigente' : a.historico ? 'timeline--pasado' : undefined}>
                 <span className={`dot${a.historico ? ' dot--azul' : ''}`} aria-hidden="true" />
                 <div className="stack" style={{ gap: 0 }}>
                   <strong>{a.relacion}{a.historico ? ' · Histórico' : a.id === vigente?.id ? ' · Vigente' : ''}</strong>
@@ -160,7 +162,8 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
                   {a.comentario && <span className="muted">{a.comentario}</span>}
                 </div>
               </li>
-            ))}
+              )
+            })}
           </ol>
           </section>
         </aside>
