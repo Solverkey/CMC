@@ -69,7 +69,7 @@ function VisorPdf({ url, nombre }: { url: string; nombre: string }) {
         nodo.appendChild(canvas)
         const ctx = canvas.getContext('2d')
         if (!ctx) continue
-        const render = page.render({ canvasContext: ctx, viewport, transform: ratio === 1 ? null : [ratio, 0, 0, ratio, 0, 0] })
+        const render = page.render({ canvas, canvasContext: ctx, viewport, transform: ratio === 1 ? undefined : [ratio, 0, 0, ratio, 0, 0] })
         pendientes.push(render)
         await render.promise
       }
