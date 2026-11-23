@@ -30,7 +30,8 @@ export function CampoPassword({
 }) {
   const [ver, setVer] = useState(false)
   const [interno, setInterno] = useState('')
-  const valor = value ?? interno
+  const controlado = value !== undefined
+  const valor = controlado ? value : interno
   const ok = reglas ? cumple(valor) : Boolean(coincide && cumple(coincide) && valor === coincide)
 
   return (
@@ -44,9 +45,9 @@ export function CampoPassword({
           autoComplete={autoComplete}
           required
           minLength={reglas || coincide !== undefined ? 10 : undefined}
-          value={valor}
+          {...(controlado ? { value: valor } : {})}
           onChange={(e) => {
-            setInterno(e.target.value)
+            if (!controlado) setInterno(e.target.value)
             onChange?.(e.target.value)
           }}
           className={ok ? 'campo--ok' : undefined}
