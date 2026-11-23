@@ -40,13 +40,21 @@ export function MensajeForm({ empresaId, hiloId, documentoId, categoriaId, asunt
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ empresa: Number(empresaId), asunto: String(datos.get('asunto') ?? asunto ?? '').trim(), documento: documentoId ? Number(documentoId) : undefined, categoria: categoriaId ? Number(categoriaId) : undefined }),
+          body: JSON.stringify({
+            empresa: Number(empresaId),
+            asunto: String(datos.get('asunto') ?? asunto ?? '').trim(),
+            texto,
+            adjuntos,
+            documento: documentoId ? Number(documentoId) : undefined,
+            categoria: categoriaId ? Number(categoriaId) : undefined,
+          }),
         })
         if (!res.ok) throw new Error(await error(res, 'No se ha podido crear la conversación.'))
         hilo = String((await res.json()).doc.id)
+      } else {
+        const res = await fetch('/api/mensajes', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hilo: Number(hilo), texto, adjuntos }) })
+        if (!res.ok) throw new Error(await error(res, 'No se ha podido enviar el mensaje.'))
       }
-      const res = await fetch('/api/mensajes', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hilo: Number(hilo), texto, adjuntos }) })
-      if (!res.ok) throw new Error(await error(res, 'No se ha podido enviar el mensaje.'))
       form.reset()
       setFicheros([])
       if (hiloId) router.refresh()

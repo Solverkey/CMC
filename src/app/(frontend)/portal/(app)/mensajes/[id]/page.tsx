@@ -63,6 +63,7 @@ export default async function ConversacionPage({ params }: { params: Promise<{ i
       )}
 
       <ol className="hilo">
+        {mensajes.length === 0 && <li className="muted">Esta conversación se guardó sin texto. Escríbalo en la respuesta de abajo.</li>}
         {mensajes.map((m) => {
           const autor = m.autor as User | null
           const deCMC = autor?.rol === 'superadmin'

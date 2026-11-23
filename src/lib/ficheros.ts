@@ -3,14 +3,22 @@ import fs from 'fs/promises'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
-const urlServidor = () => (process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000').replace(/\/$/, '')
+const urlServidor = () => (entorno('NEXT_PUBLIC_SERVER_URL') || 'http://localhost:3000').replace(/\/$/, '')
+
+/** Lectura en caliente: si se escribe `process.env.S3_BUCKET`, el build de Vercel deja el valor vacío. */
+const entorno = (nombre: string) => {
+  const valor = process.env[nombre]
+  return typeof valor === 'string' ? valor.trim() : ''
+}
+
+const PROYECTO_STORAGE = 'https://adfunvjmuqjkscarwvlu.storage.supabase.co/storage/v1/s3'
 
 const dirname = path.dirname(fileURLToPath(import.meta.url))
 
-export const RAIZ_SUBIDAS = process.env.UPLOADS_DIR || path.resolve(dirname, '../../uploads')
+export const RAIZ_SUBIDAS = entorno('UPLOADS_DIR') || path.resolve(dirname, '../../uploads')
 export const dirSubidas = (coleccion: string) => path.join(RAIZ_SUBIDAS, coleccion)
 
-export const s3Activo = () => Boolean(process.env.S3_BUCKET && process.env.S3_ACCESS_KEY_ID && process.env.S3_SECRET_ACCESS_KEY)
+export const s3Activo = () => Boolean(entorno('S3_ACCESS_KEY_ID') && entorno('S3_SECRET_ACCESS_KEY') && (entorno('S3_BUCKET') || entorno('S3_ENDPOINT') || entorno('VERCEL')))
 
 export const MAX_BYTES = 50 * 1024 * 1024
 
@@ -30,13 +38,15 @@ const MIME: Record<string, string> = {
 
 export const tipoPorNombre = (nombre: string) => MIME[nombre.split('.').pop()?.toLowerCase() ?? ''] ?? 'application/octet-stream'
 
+const cubo = () => entorno('S3_BUCKET') || 'documentos'
+
 export const configS3 = () => ({
-  region: process.env.S3_REGION || 'eu-west-1',
-  endpoint: process.env.S3_ENDPOINT || undefined,
-  forcePathStyle: Boolean(process.env.S3_ENDPOINT),
+  region: entorno('S3_REGION') || 'eu-west-1',
+  endpoint: entorno('S3_ENDPOINT') || PROYECTO_STORAGE,
+  forcePathStyle: true,
   requestChecksumCalculation: 'WHEN_REQUIRED' as const,
   responseChecksumValidation: 'WHEN_REQUIRED' as const,
-  credentials: { accessKeyId: process.env.S3_ACCESS_KEY_ID || '', secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '' },
+  credentials: { accessKeyId: entorno('S3_ACCESS_KEY_ID'), secretAccessKey: entorno('S3_SECRET_ACCESS_KEY') },
 })
 
 const cliente = () => new S3Client(configS3())
@@ -44,7 +54,7 @@ const cliente = () => new S3Client(configS3())
 let cuboListo = false
 async function asegurarCubo() {
   if (cuboListo) return
-  const Bucket = process.env.S3_BUCKET!
+  const Bucket = cubo()
   const s3 = cliente()
   try {
     await s3.send(new HeadBucketCommand({ Bucket }))
@@ -71,7 +81,9 @@ export async function guardarFichero(coleccion: string, file: { data: Buffer; na
   const filename = nombreSeguro(file.name)
   if (s3Activo()) {
     await asegurarCubo()
-    await cliente().send(new PutObjectCommand({ Bucket: process.env.S3_BUCKET!, Key: clave(coleccion, filename), Body: file.data, ContentType: file.mimetype }))
+    await cliente().send(new PutObjectCommand({ Bucket: cubo(), Key: clave(coleccion, filename), Body: file.data, ContentType: file.mimetype }))
+  } else if (entorno('VERCEL')) {
+    throw new Error('El archivo no se ha guardado: en el servidor publicado faltan las claves del cubo.')
   } else {
     const dir = dirSubidas(coleccion)
     await fs.mkdir(dir, { recursive: true })
@@ -86,7 +98,7 @@ export async function leerFichero(_coleccionOPayload: unknown, coleccionODoc?: s
   const registro = doc ?? (typeof coleccionODoc === 'object' ? coleccionODoc : undefined)
   if (!registro?.filename || !coleccion) throw new Error('El registro no tiene fichero')
   if (s3Activo()) {
-    const res = await cliente().send(new GetObjectCommand({ Bucket: process.env.S3_BUCKET!, Key: clave(coleccion, registro.filename) }))
+    const res = await cliente().send(new GetObjectCommand({ Bucket: cubo(), Key: clave(coleccion, registro.filename) }))
     return Buffer.from(await res.Body!.transformToByteArray())
   }
   return fs.readFile(path.join(dirSubidas(coleccion), path.basename(registro.filename)))
