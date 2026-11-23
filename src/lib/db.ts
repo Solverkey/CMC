@@ -23,8 +23,8 @@ function clientePostgres() {
       // El pooler en modo transacción se queda mudo si se encadenan consultas o se pide el catálogo de tipos.
       fetch_types: false,
       max: 1,
-      max_pipeline: 1,
-      idle_timeout: 5,
+      max_pipeline: 0,
+      idle_timeout: 2,
       connect_timeout: 8,
       connection: { statement_timeout: 8000 },
       ssl: (process.env.DATABASE_SSL === 'false' ? false : 'require') as false | 'require',

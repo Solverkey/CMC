@@ -15,7 +15,7 @@ export async function videosRemotos(): Promise<string[]> {
     prepare: false,
     fetch_types: false,
     max: 1,
-    max_pipeline: 1,
+    max_pipeline: 0,
     ssl: 'require' as const,
     connect_timeout: 3,
     connection: { statement_timeout: 2500 },

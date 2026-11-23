@@ -55,6 +55,15 @@ const texto = (v: unknown, d: string) => (typeof v === 'string' && v.trim() ? v 
 
 /** Contenido editable de la web, con los valores por defecto para lo que no se haya guardado. */
 export async function leerWeb(): Promise<DatosWeb> {
+  try {
+    return await leerWebGuardada()
+  } catch (error) {
+    console.error('La web pública no ha podido leer la base de datos.', error instanceof Error ? error.message : error)
+    return WEB_POR_DEFECTO
+  }
+}
+
+async function leerWebGuardada(): Promise<DatosWeb> {
   const g = await uno<Record<string, unknown>>('SELECT * FROM web ORDER BY id LIMIT 1')
   const d = WEB_POR_DEFECTO
   if (!g) return d
@@ -99,6 +108,15 @@ export async function leerWeb(): Promise<DatosWeb> {
 }
 
 export async function serviciosPublicados() {
+  try {
+    return await serviciosGuardados()
+  } catch (error) {
+    console.error('La web pública no ha podido leer los servicios.', error instanceof Error ? error.message : error)
+    return []
+  }
+}
+
+async function serviciosGuardados() {
   const rows = await filas<Record<string, unknown>>('SELECT * FROM servicios WHERE publicado IS NULL OR publicado IS NOT FALSE ORDER BY orden LIMIT 200')
   const puntos = rows.length
     ? await filas<{ parent: number; texto: string; id: string }>('SELECT _parent_id AS parent, texto, id FROM servicios_puntos ORDER BY _order')
@@ -119,6 +137,15 @@ export async function serviciosPublicados() {
 }
 
 export async function trabajosPublicados(limite = 200) {
+  try {
+    return await trabajosGuardados(limite)
+  } catch (error) {
+    console.error('La web pública no ha podido leer los trabajos.', error instanceof Error ? error.message : error)
+    return []
+  }
+}
+
+async function trabajosGuardados(limite: number) {
   const rows = await filas<Record<string, unknown>>('SELECT * FROM trabajos WHERE publicado IS NULL OR publicado IS NOT FALSE ORDER BY orden LIMIT $1', [limite])
   return rows.map((r) => ({
     id: Number(r.id),

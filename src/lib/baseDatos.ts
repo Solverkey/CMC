@@ -2,8 +2,8 @@ const POOLER = 'aws-1-eu-west-1.pooler.supabase.com'
 
 /**
  * El host `db.<ref>.supabase.co` solo tiene IPv6 y Vercel sale por IPv4: se usa el pooler.
- * El modo sesión (5432) admite 15 clientes en total y las instancias de Vercel lo agotan.
- * El modo transacción (6543) reparte las conexiones por consulta y no se llena.
+ * El modo transacción (6543) pierde la respuesta de postgres.js y la página se queda en blanco.
+ * El modo sesión (5432) contesta. Cada función usa una conexión y la suelta enseguida.
  */
 export function urlPostgres(raw: string) {
   if (!/^postgres(ql)?:\/\//.test(raw)) return raw
@@ -22,7 +22,7 @@ export function urlPostgres(raw: string) {
     if (!usuario.includes('.')) url.username = `${usuario}.${ref}`
     url.hostname = POOLER
   }
-  url.port = '6543'
+  url.port = '5432'
   url.searchParams.delete('pgbouncer')
   return url.toString()
 }
