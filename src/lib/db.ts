@@ -14,14 +14,20 @@ type Fila = Record<string, unknown>
 let pg: ReturnType<typeof postgres> | undefined
 let lite: DatabaseSync | undefined
 
+const TOPE_MS = 10_000
+
 function clientePostgres() {
   if (!pg) {
-    pg = postgres(cruda, {
+    const opciones = {
       prepare: false,
-      max: 3,
+      // El pooler en modo transacción se queda mudo si se encadenan consultas o se pide el catálogo de tipos.
+      fetch_types: false,
+      max: 1,
+      max_pipeline: 1,
       idle_timeout: 5,
-      connect_timeout: 10,
-      ssl: process.env.DATABASE_SSL === 'false' ? false : 'require',
+      connect_timeout: 8,
+      connection: { statement_timeout: 8000 },
+      ssl: (process.env.DATABASE_SSL === 'false' ? false : 'require') as false | 'require',
       types: {
         numeric: {
           to: 1700,
@@ -30,9 +36,36 @@ function clientePostgres() {
           parse: (x: string) => Number(x),
         },
       },
-    })
+    }
+    pg = postgres(cruda, opciones)
   }
   return pg
+}
+
+function soltar() {
+  const actual = pg
+  pg = undefined
+  if (!actual) return Promise.resolve()
+  return actual.end({ timeout: 0 }).catch(() => undefined)
+}
+
+/** Si el pooler acepta la conexión y no contesta, la petición no puede esperar al corte de Vercel. */
+async function consultar<T>(consulta: Promise<T>): Promise<T> {
+  let reloj: ReturnType<typeof setTimeout> | undefined
+  const tope = new Promise<never>((_, reject) => {
+    reloj = setTimeout(() => reject(new Error('La base de datos no respondió a tiempo.')), TOPE_MS)
+  })
+  try {
+    return await Promise.race([consulta, tope])
+  } catch (error) {
+    if (error instanceof Error && error.message === 'La base de datos no respondió a tiempo.') {
+      consulta.catch(() => undefined)
+      await soltar()
+    }
+    throw error
+  } finally {
+    if (reloj) clearTimeout(reloj)
+  }
 }
 
 function clienteSqlite() {
@@ -61,7 +94,7 @@ const fila = (row: Fila): Fila => Object.fromEntries(Object.entries(row).map(([k
 
 export async function filas<T = Fila>(sql: string, params: unknown[] = []): Promise<T[]> {
   if (esPostgres) {
-    const rows = await clientePostgres().unsafe(sql, params as never[])
+    const rows = await consultar(clientePostgres().unsafe(sql, params as never[]))
     return (rows as unknown as Fila[]).map((r) => fila(r) as T)
   }
   const q = preparar(sql, params)
@@ -76,7 +109,7 @@ export async function uno<T = Fila>(sql: string, params: unknown[] = []): Promis
 
 export async function ejecutar(sql: string, params: unknown[] = []): Promise<void> {
   if (esPostgres) {
-    await clientePostgres().unsafe(sql, params as never[])
+    await consultar(clientePostgres().unsafe(sql, params as never[]))
     return
   }
   const q = preparar(sql, params)
