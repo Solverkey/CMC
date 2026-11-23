@@ -3,8 +3,6 @@ import fs from 'fs/promises'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
-const urlServidor = () => (entorno('NEXT_PUBLIC_SERVER_URL') || 'http://localhost:3000').replace(/\/$/, '')
-
 /** Lectura en caliente: si se escribe `process.env.S3_BUCKET`, el build de Vercel deja el valor vacío. */
 const entorno = (nombre: string) => {
   const valor = process.env[nombre]
@@ -104,9 +102,9 @@ export async function leerFichero(_coleccionOPayload: unknown, coleccionODoc?: s
   return fs.readFile(path.join(dirSubidas(coleccion), path.basename(registro.filename)))
 }
 
-/** URL del portal. El fichero se lee en el servidor, esté en disco o en el cubo. */
+/** Ruta del propio portal. Así el navegador no pide el archivo a localhost cuando la página está publicada. */
 export async function urlDe(coleccion: string, filename: string) {
-  return `${urlServidor()}/api/ficheros/${coleccion}/${encodeURIComponent(filename)}`
+  return `/api/ficheros/${coleccion}/${encodeURIComponent(filename)}`
 }
 
 export const urlPublica = (coleccion: string, filename: string) => urlDe(coleccion, filename)
