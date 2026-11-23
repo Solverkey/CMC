@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { urlDelSitio } from '@/lib/urlFichero'
 
 /** Vista del archivo dentro de la ficha (RF-09). PDF, Word, Excel e imágenes se ven en la página. */
 export function VisorArchivo({ url, nombre, mime }: { url: string; nombre: string; mime?: string | null }) {
@@ -9,10 +10,7 @@ export function VisorArchivo({ url, nombre, mime }: { url: string; nombre: strin
   if (tipo === 'application/pdf' || archivo.endsWith('.pdf')) return <VisorPdf url={url} nombre={nombre} />
   if (esWord(tipo, archivo)) return <VisorWord url={url} nombre={nombre} antiguo={archivo.endsWith('.doc') && !archivo.endsWith('.docx')} />
   if (esExcel(tipo, archivo)) return <VisorExcel url={url} nombre={nombre} />
-  if (tipo.startsWith('image/') || /\.(png|jpe?g|webp|gif)$/i.test(archivo)) {
-    // eslint-disable-next-line @next/next/no-img-element -- el archivo puede venir de S3 y ya está comprimido
-    return <img className="visor" src={url} alt={nombre} />
-  }
+  if (tipo.startsWith('image/') || /\.(png|jpe?g|webp|gif)$/i.test(archivo)) return <VisorImagen url={url} nombre={nombre} />
   return <p className="muted">Este archivo no se puede mostrar aquí. Use Descargar para abrirlo.</p>
 }
 
@@ -23,7 +21,7 @@ const esExcel = (tipo: string, archivo: string) =>
   tipo.includes('excel') || tipo.includes('spreadsheet') || /\.xlsx?$/.test(archivo)
 
 async function bytesDe(url: string) {
-  const res = await fetch(url, { credentials: 'include' })
+  const res = await fetch(urlDelSitio(url), { credentials: 'include' })
   if (!res.ok) throw new Error('No se ha podido leer el archivo.')
   return new Uint8Array(await res.arrayBuffer())
 }
@@ -42,7 +40,7 @@ function VisorPdf({ url, nombre }: { url: string; nombre: string }) {
     ;(async () => {
       const pdfjs = await import('pdfjs-dist')
       pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
-      const res = await fetch(url, { credentials: 'include' })
+      const res = await fetch(urlDelSitio(url), { credentials: 'include' })
       if (!res.ok) throw new Error('No se ha podido leer el archivo.')
       const datos = new Uint8Array(await res.arrayBuffer())
       const doc = await pdfjs.getDocument({ data: datos }).promise
@@ -85,6 +83,14 @@ function VisorPdf({ url, nombre }: { url: string; nombre: string }) {
 
 const MAX_FILAS = 300
 const MAX_COLUMNAS = 40
+
+function VisorImagen({ url, nombre }: { url: string; nombre: string }) {
+  const [src, setSrc] = useState<string | null>(null)
+  useEffect(() => { setSrc(urlDelSitio(url)) }, [url])
+  if (!src) return <div className="visor" />
+  // eslint-disable-next-line @next/next/no-img-element -- el archivo puede venir de S3 y ya está comprimido
+  return <img className="visor" src={src} alt={nombre} />
+}
 
 /** El Word .docx se dibuja en la página. El .doc antiguo no tiene vista. */
 function VisorWord({ url, nombre, antiguo }: { url: string; nombre: string; antiguo: boolean }) {
