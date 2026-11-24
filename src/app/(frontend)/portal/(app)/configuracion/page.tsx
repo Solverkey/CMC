@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { guardarConfiguracion } from '@/app/(frontend)/portal/acciones'
 import { FilasPlantilla } from '@/components/FilasPlantilla'
+import { SelectorColor } from '@/components/SelectorColor'
 import { FormAccion } from '@/components/FormAccion'
 import { leerConfiguracion } from '@/lib/configuracion'
 import { contexto } from '@/lib/payload'
@@ -33,7 +34,7 @@ export default async function ConfiguracionPage() {
 
         <section className="card stack">
           <h2 style={{ fontSize: 22, lineHeight: '28px', margin: 0 }}>Avisos de caducidad</h2>
-          <div className="row" style={{ alignItems: 'end', gap: 12 }}>
+          <div className="row" style={{ alignItems: 'start', gap: 12 }}>
             <div className="field" style={{ flex: '1 1 180px' }}>
               <label htmlFor="antelacionMeses">Antelación por defecto (meses)</label>
               <input id="antelacionMeses" name="antelacionMeses" type="number" min={0} max={120} required defaultValue={cfg.antelacionMeses} />
@@ -74,12 +75,9 @@ export default async function ConfiguracionPage() {
               <input id="responderA" name="responderA" type="email" defaultValue={cfg.responderA ?? ''} />
             </div>
           </div>
-          <div className="row" style={{ alignItems: 'end', gap: 12 }}>
-            <div className="field" style={{ flex: '0 1 160px' }}>
-              <label htmlFor="colorPrimario">Color</label>
-              <input id="colorPrimario" name="colorPrimario" defaultValue={cfg.colorPrimario} required pattern="#[0-9a-fA-F]{3,8}" />
-            </div>
-            <div className="field" style={{ flex: '2 1 280px' }}>
+          <div className="row correo-pie" style={{ alignItems: 'start', gap: 12 }}>
+            <SelectorColor valor={cfg.colorPrimario} />
+            <div className="field" style={{ flex: '1 1 280px', minWidth: 0 }}>
               <label htmlFor="firma">Firma</label>
               <textarea id="firma" name="firma" rows={2} defaultValue={cfg.firma} />
             </div>
