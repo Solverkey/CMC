@@ -9,7 +9,7 @@ import { AREAS, areaDe, clientesDe, leerWeb, serviciosPublicados, trabajosPublic
 
 export async function generateMetadata(): Promise<Metadata> {
   const web = await leerWeb()
-  return { title: { absolute: 'CMC · Consultoría de calidad y medio ambiente en Logroño y Burgos' }, description: web.descripcion, alternates: { canonical: '/' } }
+  return { title: { absolute: 'CMC · Consultoría de calidad y medio ambiente' }, description: web.descripcion, alternates: { canonical: '/' } }
 }
 
 export default async function Inicio() {
@@ -38,11 +38,11 @@ export default async function Inicio() {
 
       <section className="hero">
         <div className="container">
-          <div className="stack" style={{ flex: '1 1 520px', minWidth: 0, gap: 24 }}>
+          <div className="hero__texto stack">
             <p className="eyebrow" style={{ color: 'var(--olive)' }}>{portada.antetitulo}</p>
             <h1 className="display">{portada.titulo}</h1>
-            <p className="lead" style={{ color: 'var(--slate-soft)', maxWidth: 580 }}>{portada.subtitulo}</p>
-            <div className="row">
+            <p className="lead">{portada.subtitulo}</p>
+            <div className="hero__acciones">
               <Link href="/contacto" className="btn btn--olive">Solicitar información</Link>
               <Link href="/servicios" className="btn btn--claro">Ver servicios</Link>
             </div>
@@ -83,7 +83,7 @@ export default async function Inicio() {
       {destacados.length ? (
         <section style={{ background: 'var(--surface-sunken)' }}>
           <div className="section container stack" style={{ gap: 32 }}>
-            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-end' }}>
+            <div className="seccion-cabeza">
               <div className="stack" style={{ gap: 8 }}>
                 <p className="eyebrow">Servicios</p>
                 <h2 className="titulo-seccion">Lo que más nos piden</h2>
@@ -104,8 +104,8 @@ export default async function Inicio() {
       ) : null}
 
       <section style={{ background: 'var(--olive-soft)' }}>
-        <div className="container section row" style={{ gap: 48 }}>
-          <div className="stack" style={{ flex: '1 1 480px', minWidth: 0 }}>
+        <div className="container section reparto reparto--centro">
+          <div className="stack reparto__ancho">
             <p className="eyebrow">Portal documental</p>
             <h2 className="titulo-seccion">Toda su documentación, al día y en un solo sitio</h2>
             <p className="lead">Las instalaciones de alta tensión, baja tensión y el resto de tipos, con su fecha de caducidad a la vista. Le avisamos antes de que venzan y puede enviarnos las renovaciones desde el portal.</p>
@@ -117,18 +117,18 @@ export default async function Inicio() {
             </ul>
             <div><Link href="/portal" className="btn btn--primary">Entrar al portal</Link></div>
           </div>
-          <div aria-hidden="true" className="card stack" style={{ flex: '1 1 360px', minWidth: 0, gap: 12, boxShadow: 'var(--shadow-card)' }}>
-            <div className="row" style={{ justifyContent: 'space-between' }}><strong>Alta tensión · Centro 1</strong><StatusBadge estado="verde" /></div>
-            <div className="row" style={{ justifyContent: 'space-between' }}><strong>Baja tensión · Nave 2</strong><StatusBadge estado="amarillo" /></div>
-            <div className="row" style={{ justifyContent: 'space-between' }}><strong>Baja tensión · Oficina</strong><StatusBadge estado="naranja" /></div>
-            <div className="row" style={{ justifyContent: 'space-between' }}><strong>Alta tensión · Nave 4</strong><StatusBadge estado="rojo" /></div>
+          <div aria-hidden="true" className="card stack vista-portal reparto__estrecho" style={{ gap: 12, boxShadow: 'var(--shadow-card)' }}>
+            <div className="vista-portal__fila"><strong>Alta tensión · Centro 1</strong><StatusBadge estado="verde" /></div>
+            <div className="vista-portal__fila"><strong>Baja tensión · Nave 2</strong><StatusBadge estado="amarillo" /></div>
+            <div className="vista-portal__fila"><strong>Baja tensión · Oficina</strong><StatusBadge estado="naranja" /></div>
+            <div className="vista-portal__fila"><strong>Alta tensión · Nave 4</strong><StatusBadge estado="rojo" /></div>
           </div>
         </div>
       </section>
 
       {trabajos.length ? (
         <section className="section container stack" style={{ gap: 32 }}>
-          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-end' }}>
+          <div className="seccion-cabeza">
             <div className="stack" style={{ gap: 8 }}>
               <p className="eyebrow">Trabajos realizados</p>
               <h2 className="titulo-seccion">Experiencia sobre el terreno</h2>

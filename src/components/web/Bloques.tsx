@@ -44,13 +44,13 @@ export function IconoArea({ area }: { area: Area }) {
 export function BandaContacto({ web, titulo = 'Hablemos de su proyecto' }: { web: DatosWeb; titulo?: string }) {
   return (
     <section className="banda">
-      <div className="container section row" style={{ gap: 48, justifyContent: 'space-between' }}>
-        <div className="stack" style={{ flex: '1 1 420px', gap: 12 }}>
+      <div className="container section reparto reparto--centro">
+        <div className="stack reparto__ancho" style={{ gap: 12 }}>
           <p className="eyebrow" style={{ color: 'var(--olive)' }}>Contacto</p>
           <h2 className="titulo-seccion">{titulo}</h2>
           <p className="lead">Cuéntenos qué necesita y le responderemos en un plazo de dos días laborables.</p>
         </div>
-        <div className="stack" style={{ flex: '0 1 360px', gap: 12 }}>
+        <div className="stack reparto__estrecho" style={{ gap: 12 }}>
           <Link href="/contacto" className="btn btn--olive">
             Escribirnos <Icon name="arrow" />
           </Link>

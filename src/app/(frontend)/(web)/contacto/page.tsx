@@ -22,8 +22,8 @@ export default async function Contacto({ searchParams }: { searchParams: Promise
         <p className="lead muted">Escríbanos o llámenos a cualquiera de nuestras dos sedes. Le responderemos en un plazo de dos días laborables.</p>
       </CabeceraPagina>
 
-      <section className="section container row" style={{ gap: 48, alignItems: 'flex-start' }}>
-        <div className="stack" style={{ flex: '1 1 320px', gap: 24 }}>
+      <section className="section container reparto">
+        <div className="stack reparto__estrecho" style={{ gap: 24 }}>
           {web.sedes.map((s) => (
             <div key={s.ciudad} className="stack" style={{ gap: 6 }}>
               <h2 style={{ fontSize: 24, lineHeight: '30px' }}>{s.ciudad}</h2>

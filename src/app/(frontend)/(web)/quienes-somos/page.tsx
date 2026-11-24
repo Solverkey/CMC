@@ -14,12 +14,12 @@ export default async function QuienesSomos() {
     <>
       <CabeceraPagina antetitulo="Quiénes somos" titulo="Más de veinte años en calidad y medio ambiente" />
 
-      <section className="section container row" style={{ gap: 48, alignItems: 'flex-start' }}>
-        <div className="stack" style={{ flex: '2 1 520px', gap: 16 }}>
+      <section className="section container reparto">
+        <div className="stack reparto__ancho" style={{ gap: 16 }}>
           <h2 className="titulo-seccion">Presentación</h2>
           <Parrafos texto={web.presentacion} className="lead" />
         </div>
-        <dl className="cifras" style={{ flex: '1 1 260px' }}>
+        <dl className="cifras reparto__estrecho">
           <div><dt>Desde</dt><dd>2000</dd></div>
           <div><dt>Sedes</dt><dd>{web.sedes.length}</dd></div>
           <div><dt>Áreas</dt><dd>Calidad y medio ambiente</dd></div>

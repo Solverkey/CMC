@@ -28,7 +28,7 @@ export default async function ServiciosPage() {
       {grupos.map((g, i) => (
         <section key={g.value} id={g.value} className="ancla" style={i % 2 ? { background: 'var(--surface-sunken)' } : undefined}>
           <div className="section container stack" style={{ gap: 32 }}>
-            <div className="row" style={{ gap: 16 }}>
+            <div className="area-cabeza">
               <IconoArea area={g.value} />
               <div className="stack" style={{ gap: 4 }}>
                 <h2 className="titulo-seccion">{g.titulo}</h2>
