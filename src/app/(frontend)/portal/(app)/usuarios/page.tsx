@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { invitar, quitar, reenviar, rol } from '../../acciones'
+import { CambioRol } from '@/components/CambioRol'
 import { EmpresaSelector } from '@/components/EmpresaSelector'
 import { FormAccion } from '@/components/FormAccion'
 import { administraEmpresa } from '@/access'
@@ -22,7 +23,7 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Pro
     <>
       <EmpresaSelector empresas={administradas.map((e) => ({ id: String(e.id), nombre: e.razonSocial }))} activa={String(empresa.id)} />
       <div className="stack" style={{ gap: 4 }}>
-        <p className="small muted">{empresa.razonSocial}</p>
+        {administradas.length < 2 ? <p className="small muted">{empresa.razonSocial}</p> : null}
         <h1>Usuarios</h1>
         <p className="muted">Dé acceso a las personas de su empresa. Si ya tienen cuenta en el portal por otra empresa, se les añade esta. Siempre debe quedar al menos un administrador.</p>
       </div>
@@ -31,67 +32,54 @@ export default async function UsuariosPage({ searchParams }: { searchParams: Pro
         <h2 style={{ fontSize: 22, lineHeight: '28px' }}>Invitar a una persona</h2>
         <FormAccion accion={invitar} className="stack">
           <input type="hidden" name="empresa" value={empresa.id} />
-          <div className="row" style={{ alignItems: 'flex-end' }}>
-            <div className="field" style={{ flex: '2 1 240px' }}><label htmlFor="email">Correo electrónico</label><input id="email" name="email" type="email" required /></div>
-            <div className="field" style={{ flex: '2 1 200px' }}><label htmlFor="nombre">Nombre</label><input id="nombre" name="nombre" /></div>
-            <div className="field" style={{ flex: '1 1 160px' }}>
+          <div className="invitar">
+            <div className="field"><label htmlFor="email">Correo electrónico</label><input id="email" name="email" type="email" required /></div>
+            <div className="field"><label htmlFor="nombre">Nombre</label><input id="nombre" name="nombre" /></div>
+            <div className="field">
               <label htmlFor="rol">Rol</label>
               <select id="rol" name="rol" defaultValue="usuario">
-                <option value="usuario">Usuario (consulta y envía)</option>
-                <option value="admin">Administrador (gestiona usuarios)</option>
+                <option value="usuario">Usuario</option>
+                <option value="admin">Administrador</option>
               </select>
             </div>
             <button className="btn btn--primary">Enviar invitación</button>
           </div>
+          <p className="hint">El usuario consulta y envía documentos. El administrador también gestiona los accesos de la empresa.</p>
         </FormAccion>
       </section>
 
-      <div className="table-wrap">
-        <table className="table">
-          <thead><tr><th>Persona</th><th>Rol</th><th>Estado</th><th /></tr></thead>
-          <tbody>
-            {usuarios.map((u) => {
-              const yo = String(u.id) === String(user.id)
-              const ultimoAdmin = u.rol === 'admin' && admins <= 1
-              return (
-                <tr key={u.id}>
-                  <td><strong>{u.nombre}</strong>{yo && <span className="tag" style={{ marginLeft: 6 }}>Usted</span>}<span className="muted" style={{ display: 'block' }}>{u.email}</span></td>
-                  <td>
-                    <FormAccion accion={rol} className="row" style={{ gap: 6 }}>
-                      <input type="hidden" name="empresa" value={empresa.id} />
-                      <input type="hidden" name="usuario" value={u.id} />
-                      <select name="rol" defaultValue={u.rol} aria-label={`Rol de ${u.nombre}`} className="input" disabled={ultimoAdmin}>
-                        <option value="usuario">Usuario</option>
-                        <option value="admin">Administrador</option>
-                      </select>
-                      {!ultimoAdmin && <button className="btn btn--ghost btn--sm">Cambiar</button>}
-                    </FormAccion>
-                  </td>
-                  <td>{!u.activo ? <span className="status status--negro">Desactivado</span> : u.pendiente ? <span className="status status--naranja">Invitación pendiente</span> : <span className="status status--verde">Activo</span>}</td>
-                  <td>
-                    <div className="row" style={{ justifyContent: 'flex-end' }}>
-                      {u.pendiente && (
-                        <FormAccion accion={reenviar}>
-                          <input type="hidden" name="empresa" value={empresa.id} />
-                          <input type="hidden" name="usuario" value={u.id} />
-                          <button className="btn btn--ghost btn--sm">Reenviar invitación</button>
-                        </FormAccion>
-                      )}
-                      {!ultimoAdmin && (
-                        <FormAccion accion={quitar} confirmar={`¿Retirar el acceso de ${u.nombre} a ${empresa.razonSocial}?`}>
-                          <input type="hidden" name="empresa" value={empresa.id} />
-                          <input type="hidden" name="usuario" value={u.id} />
-                          <button className="btn btn--ghost btn--sm error">Quitar acceso</button>
-                        </FormAccion>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+      <ul className="usuarios">
+        {usuarios.map((u) => {
+          const yo = String(u.id) === String(user.id)
+          const ultimoAdmin = u.rol === 'admin' && admins <= 1
+          return (
+            <li key={u.id} className="card usuarios__fila">
+              <div className="usuarios__quien">
+                <strong>{u.nombre}{yo ? <span className="tag" style={{ marginLeft: 8 }}>Usted</span> : null}</strong>
+                <span className="small muted">{u.email}</span>
+              </div>
+              {!u.activo ? <span className="status status--negro">Desactivado</span> : u.pendiente ? <span className="status status--naranja">Invitación pendiente</span> : <span className="status status--verde">Activo</span>}
+              <CambioRol accion={rol} empresa={empresa.id} usuario={u.id} rol={u.rol} nombre={u.nombre || u.email} bloqueado={ultimoAdmin} />
+              <div className="usuarios__acciones">
+                {u.pendiente ? (
+                  <FormAccion accion={reenviar} discreto>
+                    <input type="hidden" name="empresa" value={empresa.id} />
+                    <input type="hidden" name="usuario" value={u.id} />
+                    <button className="btn btn--ghost btn--sm">Reenviar invitación</button>
+                  </FormAccion>
+                ) : null}
+                {!ultimoAdmin ? (
+                  <FormAccion accion={quitar} discreto confirmar={`¿Retirar el acceso de ${u.nombre} a ${empresa.razonSocial}?`}>
+                    <input type="hidden" name="empresa" value={empresa.id} />
+                    <input type="hidden" name="usuario" value={u.id} />
+                    <button className="btn btn--ghost btn--sm error">Quitar acceso</button>
+                  </FormAccion>
+                ) : null}
+              </div>
+            </li>
+          )
+        })}
+      </ul>
     </>
   )
 }

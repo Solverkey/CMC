@@ -90,16 +90,26 @@ export async function guardarFichero(coleccion: string, file: { data: Buffer; na
   return { filename, mimeType: file.mimetype, filesize: file.data.length, url: await urlDe(coleccion, filename) }
 }
 
+const leerDeDisco = (coleccion: string, filename: string) =>
+  fs.readFile(path.join(dirSubidas(coleccion), path.basename(filename)))
+
 /** Contenido de un fichero subido, esté en disco o en el almacenamiento S3 de la UE. */
 export async function leerFichero(_coleccionOPayload: unknown, coleccionODoc?: string | { filename?: string | null }, doc?: { filename?: string | null }): Promise<Buffer> {
   const coleccion = typeof coleccionODoc === 'string' ? coleccionODoc : typeof _coleccionOPayload === 'string' ? _coleccionOPayload : ''
   const registro = doc ?? (typeof coleccionODoc === 'object' ? coleccionODoc : undefined)
   if (!registro?.filename || !coleccion) throw new Error('El registro no tiene fichero')
-  if (s3Activo()) {
+  if (!s3Activo()) return leerDeDisco(coleccion, registro.filename)
+  try {
     const res = await cliente().send(new GetObjectCommand({ Bucket: cubo(), Key: clave(coleccion, registro.filename) }))
-    return Buffer.from(await res.Body!.transformToByteArray())
+    if (!res.Body) throw new Error('El archivo está vacío.')
+    return Buffer.from(await res.Body.transformToByteArray())
+  } catch (error) {
+    try {
+      return await leerDeDisco(coleccion, registro.filename)
+    } catch {
+      throw error
+    }
   }
-  return fs.readFile(path.join(dirSubidas(coleccion), path.basename(registro.filename)))
 }
 
 /** Ruta del propio portal. Así el navegador no pide el archivo a localhost cuando la página está publicada. */

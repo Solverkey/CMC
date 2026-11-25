@@ -9,10 +9,11 @@ type Props = {
   className?: string
   style?: React.CSSProperties
   alTerminar?: () => void
+  discreto?: boolean
 }
 
 /** Formulario ligado a una acción del servidor, con confirmación opcional y mensaje de resultado. */
-export function FormAccion({ accion, children, confirmar, className, style, alTerminar }: Props) {
+export function FormAccion({ accion, children, confirmar, className, style, alTerminar, discreto }: Props) {
   const [estado, enviar, pendiente] = useActionState(accion, null)
   useEffect(() => {
     if (estado?.ok) alTerminar?.()
@@ -29,7 +30,7 @@ export function FormAccion({ accion, children, confirmar, className, style, alTe
     >
       {children}
       {estado?.error && <p role="alert" className="alert alert--error">{estado.error}</p>}
-      {estado?.ok && <p role="status" className="alert alert--ok">{estado.ok}</p>}
+      {estado?.ok && (discreto ? <p role="status" className="hint hint--ok">{estado.ok}</p> : <p role="status" className="alert alert--ok">{estado.ok}</p>)}
       {estado?.clave && (
         <code className="clave" onClick={(e) => navigator.clipboard?.writeText((e.target as HTMLElement).textContent ?? '')}>
           {estado.clave}
