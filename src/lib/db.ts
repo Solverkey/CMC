@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite'
 import path from 'path'
 import postgres from 'postgres'
 import { urlPostgres } from './baseDatos'
+import { cerrarApiPublica } from './cerrarApi'
 import { asegurarSqlite } from './sqliteLocal'
 
 const cruda = urlPostgres(process.env.DATABASE_URL || 'file:./cmc.db')
@@ -12,6 +13,7 @@ export const esPostgres = /^postgres(ql)?:\/\//.test(cruda)
 type Fila = Record<string, unknown>
 
 let pg: ReturnType<typeof postgres> | undefined
+let cierre: Promise<void> | undefined
 let lite: DatabaseSync | undefined
 
 const TOPE_MS = 10_000
@@ -38,13 +40,22 @@ function clientePostgres() {
       },
     }
     pg = postgres(cruda, opciones)
+    const cliente = pg
+    cierre = cerrarApiPublica(cliente).catch((error) => {
+      console.error('No se pudo cerrar la API pública de la base de datos.', error)
+    })
   }
   return pg
+}
+
+async function apiCerrada() {
+  if (cierre) await cierre
 }
 
 function soltar() {
   const actual = pg
   pg = undefined
+  cierre = undefined
   if (!actual) return Promise.resolve()
   return actual.end({ timeout: 0 }).catch(() => undefined)
 }
@@ -94,7 +105,9 @@ const fila = (row: Fila): Fila => Object.fromEntries(Object.entries(row).map(([k
 
 export async function filas<T = Fila>(sql: string, params: unknown[] = []): Promise<T[]> {
   if (esPostgres) {
-    const rows = await consultar(clientePostgres().unsafe(sql, params as never[]))
+    const cliente = clientePostgres()
+    await apiCerrada()
+    const rows = await consultar(cliente.unsafe(sql, params as never[]))
     return (rows as unknown as Fila[]).map((r) => fila(r) as T)
   }
   const q = preparar(sql, params)
@@ -109,7 +122,9 @@ export async function uno<T = Fila>(sql: string, params: unknown[] = []): Promis
 
 export async function ejecutar(sql: string, params: unknown[] = []): Promise<void> {
   if (esPostgres) {
-    await consultar(clientePostgres().unsafe(sql, params as never[]))
+    const cliente = clientePostgres()
+    await apiCerrada()
+    await consultar(cliente.unsafe(sql, params as never[]))
     return
   }
   const q = preparar(sql, params)
