@@ -47,7 +47,7 @@ Todo se activa por variables de entorno (ver `.env.example`):
 | Archivos | `S3_BUCKET`, `S3_ENDPOINT`… | Cubo privado de Supabase Storage. El portal lee el fichero y lo muestra; la descarga va en el botón. |
 | Correo | `SMTP_HOST`, `EMAIL_FROM`… | Envío por SMTP con el dominio de CMC (configure SPF, DKIM y DMARC en el DNS). |
 | Seguimiento de correo | `EMAIL_WEBHOOK_SECRET` | Webhook `POST /api/correos/eventos` (cabecera `x-webhook-secret` o `?secreto=`) para entregado, abierto y rebotado; admite los formatos de Resend, Postmark y SendGrid. La apertura también se detecta con un píxel. |
-| Dirección pública | `NEXT_PUBLIC_SERVER_URL` | Enlaces de los correos y OAuth del servidor MCP. |
+| Dirección pública | `NEXT_PUBLIC_SERVER_URL` | Enlaces de los correos, descargas y OAuth del servidor MCP. Opcional en Vercel: sin ella se usa la dirección de producción del proyecto (`VERCEL_PROJECT_PRODUCTION_URL`). Póngala al usar un dominio propio. |
 
 El doble factor es obligatorio para los super administradores salvo que `CMC_2FA_SUPERADMIN=opcional` esté definida; en producción solo debe usarse de forma temporal. Ejecute `npm run seed` una vez contra la base de producción para cargar el contenido inicial de la web (con `SEED_SIN_DEMO=1` para no crear la empresa de demo). Ya no hay migraciones automáticas: un cambio del modelo de datos se aplica con SQL en Supabase y se añade a `src/esquema/postgres.sql`. Las tablas pequeñas que el código crea solas cuando faltan (`hilos_lecturas`, para leídos y no leídos de Comunicación) no necesitan nada.
 

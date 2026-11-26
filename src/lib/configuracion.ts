@@ -154,4 +154,4 @@ export async function guardarConfiguracion(datos: GuardarConfig) {
   }
 }
 
-export const urlServidor = () => (process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000').replace(/\/$/, '')
+export { urlServidor } from './url'

@@ -1,3 +1,4 @@
+import { urlServidor } from '@/lib/url'
 import type { Metadata } from 'next'
 import React from 'react'
 import { Jost, Public_Sans } from 'next/font/google'
@@ -10,7 +11,7 @@ const jost = Jost({ subsets: ['latin'], weight: ['400', '500', '600'], variable:
 const publicSans = Public_Sans({ subsets: ['latin'], weight: ['400', '600'], variable: '--font-sans' })
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'),
+  metadataBase: new URL(urlServidor()),
   title: { default: 'CMC · Consultoría de calidad y medio ambiente', template: '%s · CMC' },
   description: 'Consultoría de calidad y medio ambiente en Logroño y Burgos: ISO 9001, ISO 14001, estudios de impacto ambiental y gestión documental.',
   openGraph: { type: 'website', locale: 'es_ES', siteName: 'CMC · Consultoría de calidad y medio ambiente' },
