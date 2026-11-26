@@ -1,4 +1,6 @@
 import Link from 'next/link'
+import { notFound } from 'next/navigation'
+import { empresasDe } from '@/access'
 import { resolverGestion } from '@/lib/estado'
 import { listarDocumentos } from '@/datos/consultas'
 import type { Categoria, Documento, Empresa } from '@/datos/tipos'
@@ -12,6 +14,9 @@ const clave = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padSta
 export default async function FacturacionPage({ searchParams }: { searchParams: Promise<{ mes?: string }> }) {
   const sp = await searchParams
   const { user, cmc } = await contexto('/portal/facturacion')
+  // Como en el menú: CMC y administradores de empresa (de las empresas que administran).
+  const administradas = new Set(empresasDe(user, true).map(String))
+  if (!cmc && !administradas.size) notFound()
   const ahora = new Date()
   const pedido = /^(\d{4})-(\d{2})$/.exec(sp.mes ?? '')
   const anio = pedido ? Number(pedido[1]) : ahora.getFullYear()
@@ -36,6 +41,7 @@ export default async function FacturacionPage({ searchParams }: { searchParams: 
     .map((d) => {
       const empresa = d.empresa as Empresa
       const cat = d.categoria as Categoria
+      if (!cmc && !administradas.has(String(empresa?.id))) return null
       if (!empresa?.activa || resolverGestion(empresa.gestion, cat?.gestion, d.gestion) !== 'gestionado') return null
       const porAviso = dentro(d.fechaAviso)
       const porCaducidad = dentro(d.fechaCaducidad)
@@ -44,6 +50,8 @@ export default async function FacturacionPage({ searchParams }: { searchParams: 
     })
     .filter((f) => f !== null)
     .sort((a, b) => a.empresa.razonSocial.localeCompare(b.empresa.razonSocial, 'es') || a.d.titulo.localeCompare(b.d.titulo, 'es'))
+  // Columna de empresa para CMC y para quien administra varias.
+  const conEmpresa = cmc || administradas.size > 1
 
   return (
     <>
@@ -65,18 +73,18 @@ export default async function FacturacionPage({ searchParams }: { searchParams: 
         <table className="table">
           <thead>
             <tr>
-              {cmc && <th>Cliente</th>}
+              {conEmpresa && <th>{cmc ? 'Cliente' : 'Empresa'}</th>}
               {cmc && <th>CIF</th>}
               <th>Documento</th>
-              <th>Categoría</th>
+              <th>Instalación</th>
               <th>En el mes</th>
             </tr>
           </thead>
           <tbody>
-            {filas.length === 0 && <tr><td colSpan={cmc ? 5 : 3} className="muted">Este mes no hay documentos gestionados con aviso o caducidad.</td></tr>}
+            {filas.length === 0 && <tr><td colSpan={3 + (conEmpresa ? 1 : 0) + (cmc ? 1 : 0)} className="muted">Este mes no hay documentos gestionados con aviso o caducidad.</td></tr>}
             {filas.map(({ d, empresa, cat, porAviso, porCaducidad }) => (
               <tr key={d.id}>
-                {cmc && <td><Link href={`/portal?empresa=${empresa.id}`}>{empresa.razonSocial}</Link></td>}
+                {conEmpresa && <td>{cmc ? <Link href={`/portal?empresa=${empresa.id}`}>{empresa.razonSocial}</Link> : empresa.razonSocial}</td>}
                 {cmc && <td>{empresa.cif}</td>}
                 <td><Link href={`/portal/documentos/${d.id}`}>{d.titulo}</Link></td>
                 <td>{cat?.nombre}</td>

@@ -70,6 +70,7 @@ export function DobleFactor({ activo, obligatorio }: { activo: boolean; obligato
 /** Cambio de contraseña de la propia cuenta. */
 export function CambiarPassword({ id }: { id: string }) {
   const [msg, setMsg] = useState<{ ok?: string; error?: string } | null>(null)
+  const [actual, setActual] = useState('')
   const [password, setPassword] = useState('')
   const [repetir, setRepetir] = useState('')
   return (
@@ -78,16 +79,18 @@ export function CambiarPassword({ id }: { id: string }) {
       onSubmit={async (e) => {
         e.preventDefault()
         if (password !== repetir) return setMsg({ error: 'Las contraseñas no coinciden.' })
-        const res = await fetch(`/api/users/${id}`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) })
+        const res = await fetch(`/api/users/${id}`, { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actual, password }) })
         const json = await res.json().catch(() => null)
-        setMsg(res.ok ? { ok: 'Contraseña cambiada.' } : { error: json?.errors?.[0]?.message ?? 'No se ha podido cambiar.' })
+        setMsg(res.ok ? { ok: 'Contraseña cambiada. Se han cerrado sus sesiones en otros dispositivos.' } : { error: json?.errors?.[0]?.message ?? 'No se ha podido cambiar.' })
         if (res.ok) {
+          setActual('')
           setPassword('')
           setRepetir('')
         }
       }}
     >
       <div className="row" style={{ alignItems: 'flex-start' }}>
+        <CampoPassword id="actual" name="actual" label="Contraseña actual" autoComplete="current-password" value={actual} onChange={setActual} crece />
         <CampoPassword id="password" name="password" label="Nueva contraseña" autoComplete="new-password" reglas value={password} onChange={setPassword} crece />
         <CampoPassword id="repetir" name="repetir" label="Repítala" autoComplete="new-password" value={repetir} onChange={setRepetir} coincide={password} crece />
         <button className="btn btn--secondary" style={{ marginTop: 26 }}>Cambiar</button>

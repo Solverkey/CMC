@@ -55,7 +55,7 @@ export default async function RevisarEnvio({ params }: { params: Promise<{ id: s
             </select>
           </div>
           <div className="field">
-            <label htmlFor="categoriaDestino">Categoría, si es nuevo</label>
+            <label htmlFor="categoriaDestino">Instalación, si es nuevo</label>
             <select className="input" id="categoriaDestino" name="categoriaDestino">
               <option value="">Elegir</option>
               {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}

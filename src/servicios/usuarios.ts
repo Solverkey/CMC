@@ -3,11 +3,12 @@ import { administraEmpresa, esSuperAdmin, rolEn } from '@/access'
 import { AppError } from '@/lib/appError'
 import { registrar } from '@/lib/actividad'
 import { crearTokenFirmado, hash, leerTokenFirmado, tokenAleatorio } from '@/lib/cifrado'
-import type { Ctx } from '@/lib/ctx'
+import { ctxSistema, type Ctx } from '@/lib/ctx'
+import { verificarPassword } from '@/lib/clave'
 import { urlServidor } from '@/lib/configuracion'
 import { programarCorreo } from '@/lib/correo'
 import { ahora, bit, ejecutar, filas, uno } from '@/lib/db'
-import { guardarPassword, usuarioPorEmail, usuarioPorId } from '@/datos/usuarios'
+import { cerrarOtrasSesiones, guardarPassword, usuarioPorEmail, usuarioPorId } from '@/datos/usuarios'
 import { empresaPorId } from '@/datos/consultas'
 import type { Empresa, User } from '@/datos/tipos'
 
@@ -190,4 +191,19 @@ export async function restablecerPassword(token: string, password: string) {
   const u = await uno<{ id: number; reset_password_token: string | null; reset_password_expiration: string | null; email: string }>('SELECT id, reset_password_token, reset_password_expiration, email FROM users WHERE reset_password_token = $1', [hash(token)])
   if (!u || !u.reset_password_expiration || new Date(u.reset_password_expiration) < new Date()) throw new AppError('El enlace no es válido o ha caducado.', 400)
   await guardarPassword(u.id, password)
+  // Quien tuviera la contraseña anterior deja de tener acceso.
+  await cerrarOtrasSesiones(u.id)
+  await registrar(ctxSistema(), { accion: 'seguridad', descripcion: `${u.email} ha restablecido su contraseña`, usuario: { id: u.id, email: u.email }, coleccion: 'users', registroId: u.id })
+}
+
+/** Cambio de la contraseña propia: pide la actual, cierra las demás sesiones y queda registrado. */
+export async function cambiarPassword(req: Ctx, sesionActual: string | null, actual: string, nueva: string) {
+  if (!req.user) throw new AppError('No autenticado.', 401)
+  const u = await usuarioPorId(req.user.id, true)
+  if (!u?.hash || !u.salt || !(await verificarPassword(actual, u.hash, u.salt))) throw new AppError('La contraseña actual no es correcta.', 400)
+  validarPassword(nueva)
+  if (actual === nueva) throw new AppError('La nueva contraseña debe ser distinta de la actual.', 400)
+  await guardarPassword(u.id, nueva)
+  await cerrarOtrasSesiones(u.id, sesionActual)
+  await registrar(req, { accion: 'seguridad', descripcion: `${u.email} ha cambiado su contraseña (se han cerrado sus otras sesiones)`, coleccion: 'users', registroId: u.id })
 }

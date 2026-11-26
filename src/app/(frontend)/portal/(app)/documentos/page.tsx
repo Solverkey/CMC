@@ -22,10 +22,12 @@ export default async function DocumentosPage({ searchParams }: { searchParams: P
   const estados = ([] as string[]).concat(sp.estado ?? []).filter(Boolean) as Estado[]
   const pagina = Math.max(Number(sp.pagina) || 1, 1)
   const destino = !cmc ? empresa : null
+  // Con una sola empresa no hace falta elegirla: el filtro de instalación y la exportación se ofrecen igual.
+  const empresaFiltro = sp.empresa || (empresas.length === 1 ? String(empresas[0].id) : '')
 
   const [r, categorias, categoriasEnvio, envios] = await Promise.all([
     buscarDocumentos(req, { q: sp.q, empresa: sp.empresa, categoria: sp.categoria, estados, desde: sp.desde, hasta: sp.hasta, limite: 50, pagina, orden: sp.orden || 'fechaCaducidad' }),
-    sp.empresa ? categoriasDeEmpresa(sp.empresa) : null,
+    empresaFiltro ? categoriasDeEmpresa(empresaFiltro, { archivadas: cmc }) : null,
     destino ? categoriasDeEmpresa(destino.id, { archivadas: false }) : null,
     !cmc ? listarEnvios(user, `${sp.empresa ? 'AND empresa_id = $1 ' : ''}ORDER BY created_at DESC`, sp.empresa ? [Number(sp.empresa)] : [], 50) : null,
   ])
@@ -45,10 +47,10 @@ export default async function DocumentosPage({ searchParams }: { searchParams: P
           <h1>Buscar documentos</h1>
         </div>
         <div className="row">
-          {sp.empresa && (
+          {empresaFiltro && (
             <>
-              <a href={`/api/inventario/${sp.empresa}?formato=xlsx`} className="btn btn--secondary btn--sm"><Icon name="download" />Excel</a>
-              <a href={`/api/inventario/${sp.empresa}?formato=pdf`} className="btn btn--secondary btn--sm"><Icon name="download" />PDF</a>
+              <a href={`/api/inventario/${empresaFiltro}?formato=xlsx`} className="btn btn--secondary btn--sm"><Icon name="download" />Excel</a>
+              <a href={`/api/inventario/${empresaFiltro}?formato=pdf`} className="btn btn--secondary btn--sm"><Icon name="download" />PDF</a>
             </>
           )}
           {destino && (
@@ -78,7 +80,7 @@ export default async function DocumentosPage({ searchParams }: { searchParams: P
           )}
           {categorias && (
             <div className="field" style={{ flex: '1 1 200px' }}>
-              <label htmlFor="categoria">Categoría</label>
+              <label htmlFor="categoria">Instalación</label>
               <select id="categoria" name="categoria" defaultValue={sp.categoria ?? ''}>
                 <option value="">Todas</option>
                 {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
@@ -117,7 +119,7 @@ export default async function DocumentosPage({ searchParams }: { searchParams: P
                 <th style={{ width: 44 }}><MarcarTodos formId="seleccion" /></th>
                 <th>Documento</th>
                 {empresas.length > 1 && <th>Empresa</th>}
-                <th>Categoría</th>
+                <th>Instalación</th>
                 <th>Caducidad</th>
               </tr>
             </thead>
@@ -162,8 +164,8 @@ export default async function DocumentosPage({ searchParams }: { searchParams: P
       {!cmc && (
         <section className="stack">
           <div className="stack" style={{ gap: 4 }}>
-            <h2>Tus envíos</h2>
-            <p className="small muted">Lo que has mandado a CMC. Pendiente hasta que lo publique; entonces pasa al listado de documentos.</p>
+            <h2>Sus envíos</h2>
+            <p className="small muted">Lo que ha enviado a CMC. Queda pendiente de revisión hasta que CMC lo publique; entonces pasa al listado de documentos.</p>
           </div>
           <div className="table-wrap">
             <table className="table">
@@ -176,12 +178,12 @@ export default async function DocumentosPage({ searchParams }: { searchParams: P
                 </tr>
               </thead>
               <tbody>
-                {(envios?.length ?? 0) === 0 && <tr><td colSpan={4} className="muted">Todavía no has enviado ningún archivo.</td></tr>}
+                {(envios?.length ?? 0) === 0 && <tr><td colSpan={empresas.length > 1 ? 4 : 3} className="muted">Todavía no ha enviado ningún archivo.</td></tr>}
                 {envios?.map((e) => {
-                  const emp = empresas.find((x) => x.id === e.empresa)
+                  const emp = typeof e.empresa === 'object' ? e.empresa : empresas.find((x) => String(x.id) === String(e.empresa))
                   const destinoId = typeof e.documentoDestino === 'number' ? e.documentoDestino : e.documentoDestino?.id
                   const estado = e.estado === 'publicado' ? 'verde' : e.estado === 'rechazado' ? 'rojo' : 'naranja'
-                  const etiqueta = e.estado === 'publicado' ? 'Publicado' : e.estado === 'rechazado' ? 'Rechazado' : 'Pendiente'
+                  const etiqueta = e.estado === 'publicado' ? 'Publicado' : e.estado === 'rechazado' ? 'Rechazado' : 'Pendiente de revisión'
                   return (
                     <tr key={e.id}>
                       <td>

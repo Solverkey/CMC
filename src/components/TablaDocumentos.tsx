@@ -12,7 +12,7 @@ export function TablaDocumentos({ docs, empresa, vacio, conEmpresa }: { docs: Do
           <tr>
             <th>Documento</th>
             {conEmpresa && <th>Empresa</th>}
-            <th>Categoría</th>
+            <th>Instalación</th>
             <th>Caducidad</th>
           </tr>
         </thead>

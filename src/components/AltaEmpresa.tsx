@@ -31,7 +31,7 @@ export function AltaEmpresa() {
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div className="stack" style={{ gap: 4 }}>
               <h2 id="alta-titulo" style={{ margin: 0 }}>Alta de empresa</h2>
-              <p className="muted" style={{ margin: 0 }}>Se crean las categorías estándar y se invita al administrador por correo.</p>
+              <p className="muted" style={{ margin: 0 }}>Se crean las instalaciones estándar y se invita al administrador por correo.</p>
             </div>
             <button className="btn btn--secondary btn--sm" type="button" onClick={() => dialogo.current?.close()}>Cerrar</button>
           </div>
@@ -56,7 +56,7 @@ export function AltaEmpresa() {
               <div className="field" style={{ flex: '1 1 240px' }}><label htmlFor="adminEmail">Email del administrador</label><input className="input" id="adminEmail" name="adminEmail" type="email" required /></div>
               <div className="field" style={{ flex: '1 1 200px' }}><label htmlFor="adminNombre">Nombre</label><input className="input" id="adminNombre" name="adminNombre" /></div>
             </div>
-            <label className="row"><input type="checkbox" name="aplicarPlantilla" defaultChecked /> Crear las categorías estándar</label>
+            <label className="row"><input type="checkbox" name="aplicarPlantilla" defaultChecked /> Crear las instalaciones estándar</label>
             <button className="btn btn--primary" type="submit">Crear empresa</button>
           </FormAccion>
         </div>

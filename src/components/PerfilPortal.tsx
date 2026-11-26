@@ -12,11 +12,10 @@ type Enlace = { href: string; texto: string; icono: IconName }
 export function PerfilPortal({ nombre, rol, enlaces }: { nombre: string; rol: string; enlaces: Enlace[] }) {
   const ruta = usePathname()
   const caja = useRef<HTMLDivElement>(null)
-  const [abierto, setAbierto] = useState(false)
-
-  useEffect(() => {
-    setAbierto(false)
-  }, [ruta])
+  // Se recuerda en qué página se abrió: al navegar a otra, el menú se cierra solo.
+  const [abiertoEn, setAbiertoEn] = useState<string | null>(null)
+  const abierto = abiertoEn === ruta
+  const setAbierto = (v: boolean | ((a: boolean) => boolean)) => setAbiertoEn((typeof v === 'function' ? v(abierto) : v) ? ruta : null)
 
   useEffect(() => {
     if (!abierto) return

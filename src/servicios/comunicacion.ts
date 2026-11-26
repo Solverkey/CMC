@@ -9,7 +9,7 @@ import { ahora, ejecutar, filas, uno } from '@/lib/db'
 import { guardarFichero, leerFichero } from '@/lib/ficheros'
 import { crearPdf } from '@/lib/pdf'
 import { prepararFichero, type Fichero } from '@/lib/subidas'
-import { categoriaPorId, documentoPorId, empresaVisible, hiloPorId, mensajesDeHilo } from '@/datos/consultas'
+import { categoriaPorId, documentoPorId, empresaVisible, hiloPorId, marcarLeido, mensajesDeHilo } from '@/datos/consultas'
 import { crearEnvio } from '@/datos/operaciones'
 import { usuarioPorId } from '@/datos/usuarios'
 import { mapAdjunto } from '@/datos/mapas'
@@ -41,7 +41,7 @@ export async function crearHilo(req: Ctx, d: { empresa: string | number; asunto:
   }
   if (d.categoria) {
     const cat = await categoriaPorId(d.categoria)
-    if (!cat || String(idDe(cat.empresa)) !== String(d.empresa)) throw new AppError('Esa categoría no es de esta empresa.', 400)
+    if (!cat || String(idDe(cat.empresa)) !== String(d.empresa)) throw new AppError('Esa instalación no es de esta empresa.', 400)
   }
   const momento = ahora()
   const row = await uno<{ id: number }>(
@@ -71,6 +71,7 @@ export async function escribirMensaje(req: Ctx, d: { hilo: string | number; text
   for (const a of d.adjuntos ?? []) {
     await ejecutar('INSERT INTO mensajes_rels ("order", parent_id, path, adjuntos_id) VALUES ($1,$2,$3,$4)', [orden++, row!.id, 'adjuntos', Number(a)])
   }
+  await marcarLeido(hilo.id, req.user.id)
   const reabrir = !esSuperAdmin(req.user) && hilo.estado === 'resuelto'
   await ejecutar('UPDATE hilos SET ultimo_mensaje = $2, estado = $3, updated_at = $2 WHERE id = $1', [hilo.id, momento, reabrir ? 'abierto' : hilo.estado])
   await registrar(req, { accion: 'mensaje', descripcion: `Mensaje en «${hilo.asunto}»`, empresa: idDe(hilo.empresa), coleccion: 'mensajes', registroId: row!.id, datos: { hilo: hilo.id } })

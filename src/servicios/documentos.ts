@@ -117,16 +117,19 @@ export async function resolverEnlace(req: Ctx, token: string, historialFn: (req:
   return { data, nombre: reg.filename, mime: reg.mimeType ?? 'application/octet-stream' }
 }
 
+/** Los clientes no ven los documentos archivados (azul) en la búsqueda: tampoco en el ZIP ni en el inventario. */
+const sinArchivados = (user: User | null) => (esSuperAdmin(user) ? '' : "AND (estado IS NULL OR estado <> 'azul')")
+
 export async function zipDocumentos(req: Ctx, ids: (string | number)[], conHistorico = false) {
   if (!ids.length) throw new AppError('No ha elegido ningún documento.', 400)
   if (ids.length > 500) throw new AppError('Como máximo 500 documentos por descarga.', 400)
-  const lista = ids.map(Number).join(',')
-  const docs = await listarDocumentos(req.user, `AND id IN (${lista})`, [], 500)
+  const lista = ids.map(Number).filter((n) => Number.isInteger(n) && n > 0).join(',') || '0'
+  const docs = await listarDocumentos(req.user, `AND id IN (${lista}) ${sinArchivados(req.user)}`, [], 500)
   const zip = new JSZip()
   let n = 0
   for (const d of docs) {
     const archivos = (await archivosDeDocumento(d.id, req.user)).filter((a) => conHistorico || !a.historico)
-    const carpeta = `${seguro((d.empresa as Empresa).razonSocial)}/${seguro((d.categoria as Categoria)?.nombre ?? 'Sin categoría')}/${seguro(d.titulo)}`
+    const carpeta = `${seguro((d.empresa as Empresa).razonSocial)}/${seguro((d.categoria as Categoria)?.nombre ?? 'Sin instalación')}/${seguro(d.titulo)}`
     for (const a of archivos) {
       const data = await leerFichero('archivos', a).catch(() => null)
       if (!data || !a.filename) continue
@@ -144,7 +147,7 @@ export async function inventario(req: Ctx, empresaId: string | number, formato: 
   if (!puedeVerEmpresa(req.user, empresaId)) throw new AppError('No tiene acceso a esa empresa.', 403)
   const empresa = await empresaVisible(req.user, empresaId)
   if (!empresa) throw new AppError('No tiene acceso a esa empresa.', 403)
-  const docs = await listarDocumentos(req.user, 'AND empresa_id = $1 ORDER BY fecha_caducidad', [Number(empresa.id)], 10000)
+  const docs = await listarDocumentos(req.user, `AND empresa_id = $1 ${sinArchivados(req.user)} ORDER BY fecha_caducidad`, [Number(empresa.id)], 10000)
   const filasDoc = (docs as Documento[])
     .map((d) => {
       const cat = d.categoria as Categoria
@@ -171,7 +174,7 @@ export async function inventario(req: Ctx, empresaId: string | number, formato: 
     wb.creator = 'Portal documental CMC'
     const ws = wb.addWorksheet('Inventario')
     ws.columns = [
-      { header: 'Categoría', key: 'categoria', width: 22 },
+      { header: 'Instalación', key: 'categoria', width: 22 },
       { header: 'Documento', key: 'titulo', width: 42 },
       { header: 'Referencia', key: 'referencia', width: 16 },
       { header: 'Organismo emisor', key: 'organismo', width: 22 },
@@ -189,7 +192,7 @@ export async function inventario(req: Ctx, empresaId: string | number, formato: 
   const pdf = await crearPdf(`Inventario documental · ${empresa.razonSocial}`, `CIF ${empresa.cif} · ${filasDoc.length} documentos · generado el ${hoy}`)
   pdf.tabla(
     [
-      { titulo: 'Categoría', ancho: 100 },
+      { titulo: 'Instalación', ancho: 100 },
       { titulo: 'Documento', ancho: 200 },
       { titulo: 'Referencia', ancho: 80 },
       { titulo: 'Organismo', ancho: 100 },

@@ -34,6 +34,7 @@ export default async function SeguridadPage() {
 
       <section className="card stack">
         <h2 style={{ fontSize: 22, lineHeight: '28px' }}>Últimos accesos</h2>
+        {accesos.length === 0 && <p className="small muted">Todavía no hay accesos registrados.</p>}
         <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>
           {accesos.map((a) => (
             <li key={a.id}>{fmtHora(a.createdAt)} · {a.accion === 'login' ? 'Acceso correcto' : <span className="error">Intento fallido</span>}{a.ip ? ` · ${a.ip}` : ''}</li>

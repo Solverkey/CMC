@@ -52,7 +52,7 @@ export function FilasPlantilla({ inicial }: { inicial: FilaCategoria[] }) {
         </div>
       ))}
       <button className="btn btn--secondary" type="button" onClick={() => setFilas((prev) => [...prev, vacia()])}>
-        Añadir categoría
+        Añadir instalación
       </button>
     </div>
   )

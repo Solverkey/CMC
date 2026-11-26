@@ -29,7 +29,9 @@ export function AvisoCookies() {
   const [marketing, setMarketing] = useState(false)
 
   useEffect(() => {
+    // La cookie solo existe en el navegador: se lee tras la hidratación para no pintar distinto en el servidor.
     const previa = leer()
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!previa) setVisible(true)
     else {
       setAnalitica(previa.analitica)

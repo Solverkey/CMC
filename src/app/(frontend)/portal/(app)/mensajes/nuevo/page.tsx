@@ -37,7 +37,7 @@ export default async function NuevaConversacion({ searchParams }: { searchParams
             empresaId={String(empresa.id)}
             documentoId={doc ? String(doc.id) : undefined}
             categoriaId={categoriaValida ? String(categoriaValida.id) : undefined}
-            sobre={doc ? `Documento «${doc.titulo}» · ${empresa.razonSocial}` : categoriaValida ? `Categoría «${categoriaValida.nombre}» · ${empresa.razonSocial}` : undefined}
+            sobre={doc ? `Documento «${doc.titulo}» · ${empresa.razonSocial}` : categoriaValida ? `Instalación «${categoriaValida.nombre}» · ${empresa.razonSocial}` : undefined}
             asunto={doc ? doc.titulo : undefined}
             filtros={consultaFiltros(filtros)}
           />

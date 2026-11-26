@@ -96,7 +96,7 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
             <dl className="dl">
               <div><dt>Referencia</dt><dd>{doc.referencia || '—'}</dd></div>
               <div><dt>Organismo emisor</dt><dd>{doc.organismo || '—'}</dd></div>
-              <div><dt>Categoría</dt><dd>{categoria?.nombre}</dd></div>
+              <div><dt>Instalación</dt><dd>{categoria?.nombre}</dd></div>
               <div><dt>Fecha de emisión</dt><dd>{fmt(doc.fechaEmision)}</dd></div>
               <div><dt>Fecha de caducidad</dt><dd>{doc.fechaCaducidad ? fmt(doc.fechaCaducidad) : 'Indefinido'}</dd></div>
               <div><dt>Fecha de aviso</dt><dd>{fmt(doc.fechaAviso)}</dd></div>

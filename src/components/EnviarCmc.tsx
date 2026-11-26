@@ -27,7 +27,7 @@ export function EnviarCmc({ empresaId, empresaNombre, categorias }: { empresaId:
           <div className="dialogo__cabeza">
             <div className="stack" style={{ gap: 4 }}>
               <h2 id="enviar-cmc-titulo" style={{ margin: 0 }}>Enviar a CMC</h2>
-              <p className="muted" style={{ margin: 0 }}>{empresaNombre}. CMC revisa el envío, completa la categoría y las fechas, y lo publica. Le avisaremos por correo.</p>
+              <p className="muted" style={{ margin: 0 }}>{empresaNombre}. CMC revisa el envío, completa la instalación y las fechas, y lo publica. Le avisaremos por correo.</p>
             </div>
             <button className="dialogo__cerrar" type="button" onClick={cerrar} aria-label="Cerrar"><Icon name="close" size={16} /></button>
           </div>

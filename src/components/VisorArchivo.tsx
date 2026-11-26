@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { urlDelSitio } from '@/lib/urlFichero'
 
 /** Vista del archivo dentro de la ficha (RF-09). PDF, Word, Excel e imágenes se ven en la página. */
@@ -87,12 +87,14 @@ function VisorPdf({ url, nombre }: { url: string; nombre: string }) {
   return <div ref={caja} className="visor visor--pdf" role="img" aria-label={`Vista previa de ${nombre}`} />
 }
 
+const sinSuscripcion = () => () => {}
+
 const MAX_FILAS = 300
 const MAX_COLUMNAS = 40
 
 function VisorImagen({ url, nombre }: { url: string; nombre: string }) {
-  const [src, setSrc] = useState<string | null>(null)
-  useEffect(() => { setSrc(urlDelSitio(url)) }, [url])
+  // La dirección depende de la página abierta (window): en el servidor no hay imagen y en el navegador se calcula sin efecto.
+  const src = useSyncExternalStore(sinSuscripcion, () => urlDelSitio(url), () => null)
   if (!src) return <div className="visor" />
   // eslint-disable-next-line @next/next/no-img-element -- el archivo puede venir de S3 y ya está comprimido
   return <img className="visor" src={src} alt={nombre} />

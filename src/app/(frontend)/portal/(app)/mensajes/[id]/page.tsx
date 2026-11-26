@@ -8,7 +8,7 @@ import { ScrollAlFinal } from '@/components/comunicacion/ScrollAlFinal'
 import { Icon } from '@/components/Icon'
 import { MensajeForm } from '@/components/MensajeForm'
 import { tamano } from '@/lib/subidas'
-import { hiloPorId, mensajesDeHilo, usuariosCms } from '@/datos/consultas'
+import { hiloPorId, marcarLeido, mensajesDeHilo, usuariosCms } from '@/datos/consultas'
 import type { Adjunto, Empresa, User } from '@/datos/tipos'
 import { contexto, idDe } from '@/lib/payload'
 
@@ -27,6 +27,8 @@ export default async function ConversacionPage({ params, searchParams }: { param
   const { user, cmc } = await contexto(`/portal/mensajes/${id}`)
   const hilo = await hiloPorId(id, user)
   if (!hilo) notFound()
+  // Abrirla la marca como leída (antes de pintar la bandeja, para que la lista ya salga al día).
+  await marcarLeido(hilo.id, user.id)
 
   const empresa = hilo.empresa as Empresa
   const doc = typeof hilo.documento === 'object' && hilo.documento ? hilo.documento : null
@@ -47,7 +49,7 @@ export default async function ConversacionPage({ params, searchParams }: { param
           <p className="small muted">
             {empresa.razonSocial}
             {doc && <> · Sobre <Link href={`/portal/documentos/${doc.id}`}>{doc.titulo}</Link></>}
-            {categoria && <> · Categoría {categoria.nombre}</>}
+            {categoria && <> · Instalación {categoria.nombre}</>}
           </p>
           <div className="row small" style={{ gap: 8 }}>
             <span className={`status status--${resuelta ? 'verde' : 'naranja'}`}>{resuelta ? 'Resuelta' : 'Abierta'}</span>

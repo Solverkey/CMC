@@ -15,7 +15,7 @@ const dia = (v: string | Date) => {
 
 /**
  * Aviso que corresponde hoy a un documento (informe, apartado 6):
- * aviso inicial en la fecha de aviso, recordatorio N días antes de caducar, aviso el día de la caducidad y
+ * aviso inicial en la fecha de aviso, recordatorio N días antes de caducar, aviso al día siguiente de la caducidad y
  * recordatorio semanal o mensual mientras siga caducado, hasta un máximo. La clave incluye la fecha de
  * caducidad: al publicar una renovación la secuencia anterior se detiene y empieza la nueva.
  */
@@ -30,9 +30,12 @@ export function hitoDeHoy(
   const aviso = doc.fechaAviso ? dia(doc.fechaAviso) : cad
   const c = cad.toISOString().slice(0, 10)
 
-  if (h >= cad) {
+  // Como en el semáforo, el documento vale hasta el día de su caducidad incluido: el aviso de «caducado» sale el día siguiente,
+  // cuando el documento ya está en rojo.
+  if (h > cad) {
     const periodo = cfg.frecuenciaCaducado === 'mensual' ? 30 : 7
-    const n = Math.floor((h.getTime() - cad.getTime()) / DIA / periodo)
+    const primero = cad.getTime() + DIA
+    const n = Math.floor((h.getTime() - primero) / DIA / periodo)
     if (n === 0) return { tipo: 'caducado', clave: `caducado|${c}` }
     return n <= cfg.maxRecordatoriosCaducado ? { tipo: 'recordatorio_caducado', clave: `caducado-${n}|${c}`, n } : null
   }

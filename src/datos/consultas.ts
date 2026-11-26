@@ -1,6 +1,6 @@
 import { empresasDe, esSuperAdmin } from '@/access'
 import type { Archivo, Categoria, Documento, Empresa, Envio, Hilo, Mensaje, User } from './tipos'
-import { esPostgres, filas, uno } from '@/lib/db'
+import { ahora, ejecutar, esPostgres, filas, uno } from '@/lib/db'
 import { urlDe } from '@/lib/ficheros'
 import { mapActividad, mapArchivo, mapCategoria, mapCorreo, mapDocumento, mapEmpresa, mapEnvio, mapHilo, mapMensaje, mapUser, visible } from './mapas'
 
@@ -278,6 +278,61 @@ export async function contarPendientesDeRespuesta(user: User) {
            WHERE m.hilo_id = h.id AND ${otroLado}
              AND m.id = (SELECT m2.id FROM mensajes m2 WHERE m2.hilo_id = h.id ORDER BY m2.created_at DESC, m2.id DESC LIMIT 1)
         )`,
+  )
+  return Number(row?.n ?? 0)
+}
+
+// ——— Leídos y no leídos de Comunicación ———
+// Una fila por persona y conversación con la última vez que la abrió. La fila (0, 0) guarda cuándo se creó la tabla:
+// lo escrito antes cuenta como leído, para que al desplegar no aparezca todo el histórico como nuevo.
+
+let lecturasListas: Promise<void> | null = null
+
+export function asegurarLecturas() {
+  lecturasListas ??= (async () => {
+    const id = esPostgres ? 'serial PRIMARY KEY' : 'integer PRIMARY KEY'
+    const fecha = esPostgres ? 'timestamp(3) with time zone' : 'text'
+    await ejecutar(`CREATE TABLE IF NOT EXISTS hilos_lecturas (id ${id}, hilo_id integer NOT NULL, usuario_id integer NOT NULL, leido_en ${fecha} NOT NULL)`)
+    await ejecutar('CREATE UNIQUE INDEX IF NOT EXISTS hilos_lecturas_hilo_usuario_idx ON hilos_lecturas (hilo_id, usuario_id)')
+    await ejecutar('INSERT INTO hilos_lecturas (hilo_id, usuario_id, leido_en) VALUES (0, 0, $1) ON CONFLICT (hilo_id, usuario_id) DO NOTHING', [ahora()])
+  })().catch((e) => {
+    lecturasListas = null
+    throw e
+  })
+  return lecturasListas
+}
+
+/** Marca la conversación como leída por el usuario hasta este momento. */
+export async function marcarLeido(hiloId: number | string, usuarioId: number | string) {
+  await asegurarLecturas()
+  await ejecutar(
+    'INSERT INTO hilos_lecturas (hilo_id, usuario_id, leido_en) VALUES ($1, $2, $3) ON CONFLICT (hilo_id, usuario_id) DO UPDATE SET leido_en = excluded.leido_en',
+    [Number(hiloId), Number(usuarioId), ahora()],
+  )
+}
+
+const condicionNoLeido = `(m.autor_id IS NULL OR m.autor_id <> $1)
+  AND m.created_at > COALESCE(
+    (SELECT l.leido_en FROM hilos_lecturas l WHERE l.hilo_id = m.hilo_id AND l.usuario_id = $1),
+    (SELECT b.leido_en FROM hilos_lecturas b WHERE b.hilo_id = 0 AND b.usuario_id = 0)
+  )`
+
+/** Mensajes sin leer (escritos por otros después de la última lectura) de cada conversación. */
+export async function noLeidos(usuarioId: number | string, hiloIds: (number | string)[]): Promise<Map<number, number>> {
+  const unicos = ids(hiloIds)
+  if (!unicos.length) return new Map()
+  await asegurarLecturas()
+  const rows = await filas<Fila>(`SELECT m.hilo_id, COUNT(*) AS n FROM mensajes m WHERE m.hilo_id IN (${unicos.join(',')}) AND ${condicionNoLeido} GROUP BY m.hilo_id`, [Number(usuarioId)])
+  return new Map(rows.map((r) => [Number(r.hilo_id), Number(r.n)]))
+}
+
+/** Conversaciones con mensajes sin leer: el contador del menú. */
+export async function contarNoLeidas(user: User) {
+  await asegurarLecturas()
+  const row = await uno<{ n: number }>(
+    `SELECT COUNT(DISTINCT m.hilo_id) AS n FROM mensajes m JOIN hilos h ON h.id = m.hilo_id
+      WHERE ${visible(user, 'h.empresa_id')} AND ${condicionNoLeido}`,
+    [Number(user.id)],
   )
   return Number(row?.n ?? 0)
 }

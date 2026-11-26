@@ -1,14 +1,15 @@
 import { NextResponse, type NextRequest } from 'next/server'
 
-// El acceso (con doble factor) y la recuperación de contraseña se hacen siempre desde el portal.
+/**
+ * El antiguo panel /admin ya no existe: todo se hace desde el portal. Los marcadores y enlaces viejos
+ * llevan a la recuperación de contraseña o al portal (que pide iniciar sesión si hace falta).
+ */
 export function proxy(req: NextRequest) {
-  const { pathname, searchParams } = req.nextUrl
-  const destino = pathname.startsWith('/admin/forgot') || pathname.startsWith('/admin/reset') ? '/portal/recuperar' : '/portal/login'
-  const url = new URL(destino, req.url)
-  if (destino === '/portal/login') url.searchParams.set('next', searchParams.get('redirect') || '/admin')
-  return NextResponse.redirect(url)
+  const { pathname } = req.nextUrl
+  const destino = pathname.startsWith('/admin/forgot') || pathname.startsWith('/admin/reset') ? '/portal/recuperar' : '/portal'
+  return NextResponse.redirect(new URL(destino, req.url))
 }
 
 export const config = {
-  matcher: ['/admin/login', '/admin/forgot', '/admin/reset/:path*', '/admin/create-first-user'],
+  matcher: ['/admin', '/admin/:path*'],
 }

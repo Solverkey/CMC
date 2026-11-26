@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Suspense } from 'react'
-import { listarHilos, ultimosMensajes } from '@/datos/consultas'
+import { listarHilos, noLeidos, ultimosMensajes } from '@/datos/consultas'
 import type { Empresa, User } from '@/datos/tipos'
 import { empresasDelUsuario } from '@/lib/payload'
 import { Icon } from '../Icon'
@@ -60,7 +60,7 @@ export async function Bandeja({ user, cmc, sp, activo, children }: Props) {
     cond.push(`(LOWER(asunto) LIKE ${texto} OR EXISTS (SELECT 1 FROM mensajes mb WHERE mb.hilo_id = hilos.id AND LOWER(mb.texto) LIKE ${texto}))`)
   }
   const hilos = await listarHilos(user, `${cond.length ? `AND ${cond.join(' AND ')} ` : ''}ORDER BY ultimo_mensaje DESC LIMIT 200`, params)
-  const ultimos = await ultimosMensajes(hilos.map((h) => h.id))
+  const [ultimos, sinLeer] = await Promise.all([ultimosMensajes(hilos.map((h) => h.id)), noLeidos(user.id, hilos.map((h) => h.id))])
   const qs = consultaFiltros(sp)
   const variasEmpresas = cmc || empresas.length > 1
 
@@ -94,17 +94,19 @@ export async function Bandeja({ user, cmc, sp, activo, children }: Props) {
             // La pelota está en su tejado: el último mensaje es del otro lado.
             const pendiente = Boolean(abierta && u && (cmc ? !u.deCmc : u.deCmc))
             const sobre = typeof h.documento === 'object' && h.documento ? h.documento.titulo : typeof h.categoria === 'object' && h.categoria ? h.categoria.nombre : null
+            const nuevos = sinLeer.get(h.id) ?? 0
             const asignado = typeof h.asignado === 'object' && h.asignado ? h.asignado.nombre : null
             return (
               <li key={h.id}>
                 <Link
                   href={`/portal/mensajes/${h.id}${qs}`}
-                  className={`bandeja__hilo${pendiente ? ' bandeja__hilo--pendiente' : ''}`}
+                  className={`bandeja__hilo${nuevos ? ' bandeja__hilo--noleido' : ''}`}
                   aria-current={activo === String(h.id) ? 'page' : undefined}
                 >
                   <span className="bandeja__fila">
                     <span className="bandeja__asunto">{h.asunto}</span>
                     <time dateTime={u?.fecha ?? h.ultimoMensaje ?? undefined}>{fechaCorta(u?.fecha ?? h.ultimoMensaje)}</time>
+                    {nuevos > 0 && <span className="contador" aria-label={`${nuevos} sin leer`}>{nuevos}</span>}
                   </span>
                   {variasEmpresas && <span className="bandeja__empresa">{(h.empresa as Empresa)?.razonSocial}</span>}
                   {u && (

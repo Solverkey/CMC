@@ -1,5 +1,6 @@
 import { empresasDe, esSuperAdmin } from '@/access'
 import { AppError } from '@/lib/appError'
+import { registrar } from '@/lib/actividad'
 import type { Ctx } from '@/lib/ctx'
 import { ahora, bit, ejecutar, filas, uno } from '@/lib/db'
 import { leerConfiguracion } from './configuracion'
@@ -130,16 +131,36 @@ export async function efectosDe(req: Ctx, relacion: string): Promise<Efecto[] | 
 export async function crearCatalogo(ctx: Ctx, tipo: TipoCatalogo, nombre: string, efectos?: Efecto[]) {
   if (!esSuperAdmin(ctx.user)) throw new AppError('Solo CMC.', 403)
   const limpio = nombre.trim()
+  if (!limpio) throw new AppError('Escriba el nombre.')
+  const validos = (efectos ?? []).filter((e) => EFECTOS.some((x) => x.value === e))
+  if (tipo === 'relacion' && !validos.length) throw new AppError('Indique el efecto del nuevo tipo de relación.')
   const ya = await buscarEntrada(ctx, tipo, limpio)
-  if (ya) throw new AppError(`Ya existe «${ya.nombre}» en este catálogo.`)
-  if (tipo === 'relacion' && !efectos?.length) throw new AppError('Indique el efecto del nuevo tipo de relación.')
-  return usarNombre(ctx, tipo, limpio, { efectos })
+  if (ya && ya.activo !== false) throw new AppError(`Ya existe «${ya.nombre}» en este catálogo.`)
+  if (ya) {
+    // Se había quitado del selector: se vuelve a poner, con los efectos indicados.
+    await ejecutar('UPDATE catalogo SET activo = $2, updated_at = $3 WHERE id = $1', [ya.id, bit(true), ahora()])
+    if (tipo === 'relacion') {
+      await ejecutar('DELETE FROM catalogo_efectos WHERE parent_id = $1', [ya.id])
+      let orden = 1
+      for (const valor of validos) await ejecutar('INSERT INTO catalogo_efectos ("order", parent_id, value) VALUES ($1,$2,$3)', [orden++, ya.id, valor])
+    }
+    await registrar(ctx, { accion: 'alta', descripcion: `«${ya.nombre}» vuelve al selector de ${NOMBRE_TIPO[tipo]}`, coleccion: 'catalogo', registroId: ya.id })
+    return ya
+  }
+  const nuevo = await usarNombre(ctx, tipo, limpio, { efectos: validos })
+  await registrar(ctx, { accion: 'alta', descripcion: `«${limpio}» añadido al selector de ${NOMBRE_TIPO[tipo]}`, coleccion: 'catalogo', registroId: nuevo?.id })
+  return nuevo
 }
 
 export async function desactivarCatalogo(ctx: Ctx, id: number | string) {
   if (!esSuperAdmin(ctx.user)) throw new AppError('Solo CMC.', 403)
+  const fila = await uno<{ nombre: string; tipo: TipoCatalogo }>('SELECT nombre, tipo FROM catalogo WHERE id = $1', [Number(id)])
+  if (!fila) throw new AppError('Opción no encontrada.', 404)
   await ejecutar('UPDATE catalogo SET activo = $2, updated_at = $3 WHERE id = $1', [Number(id), bit(false), ahora()])
+  await registrar(ctx, { accion: 'baja', descripcion: `«${fila.nombre}» quitado del selector de ${NOMBRE_TIPO[fila.tipo] ?? fila.tipo}`, coleccion: 'catalogo', registroId: id })
 }
+
+const NOMBRE_TIPO: Record<TipoCatalogo, string> = { categoria: 'instalaciones', documento: 'documentos', relacion: 'relación del archivo' }
 
 export async function propagarNombre(tipo: TipoCatalogo, de: string, a: string) {
   for (const { tabla, campo } of USOS[tipo]) {

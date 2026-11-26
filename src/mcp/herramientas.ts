@@ -1,7 +1,7 @@
 import path from 'path'
 import { z } from 'zod'
 import type { Adjunto, Categoria, Documento, Empresa, Envio, User } from '@/datos/tipos'
-import { archivoPorId, archivosDeDocumento, categoriasDeEmpresa, contar, contarPendientesDeRespuesta, documentoPorId, empresaPorId, empresaVisible, envioPorId, hiloPorId, listarActividad, listarDocumentos, listarEnvios, listarHilos, mensajesDeHilo, ultimosMensajes, usuariosCms } from '@/datos/consultas'
+import { archivoPorId, archivosDeDocumento, categoriasDeEmpresa, contar, contarNoLeidas, contarPendientesDeRespuesta, documentoPorId, empresaPorId, empresaVisible, envioPorId, hiloPorId, listarActividad, listarDocumentos, listarEnvios, listarHilos, marcarLeido, mensajesDeHilo, noLeidos, ultimosMensajes, usuariosCms } from '@/datos/consultas'
 import { actualizarCategoria, actualizarDocumento, actualizarEmpresa, crearArchivo, crearDocumento, crearEmpresa, crearEnvio, resolverEnvio } from '@/datos/operaciones'
 import { administraEmpresa, empresasDe, esSuperAdmin } from '../access'
 import { AppError } from '../lib/appError'
@@ -181,6 +181,7 @@ export const herramientas: Herramienta[] = [
       documentos: { vigentes: total.verde, caducidadProxima: total.amarillo, condicionados: total.naranja, caducados: total.rojo, noLegalizados: total.negro, archivados: total.azul },
       caducanEn: { '30 días': a30, '60 días': a60, '90 días': a90 },
       conversacionesPendientesDeMiRespuesta: await contarPendientesDeRespuesta(req.user!),
+      conversacionesSinLeer: await contarNoLeidas(req.user!),
       ...(cmc ? { enviosPendientesDeRevisar: await contar('envios', "estado = 'pendiente'") } : {}),
     }
   }),
@@ -203,7 +204,7 @@ export const herramientas: Herramienta[] = [
       categorias: cats.map((c) => ({ id: c.id, nombre: c.nombre })),
     }
   }),
-  h('listar_categorias', { title: 'Categorías de una empresa', acceso: 'todos', soloLectura: true }, 'Categorías (instalaciones) de una empresa con su modalidad de gestión y antelación de aviso. Útil para filtrar documentos o, en CMC, para crear uno.', { empresa: id, incluirArchivadas: z.boolean().optional() }, async (a, req) => {
+  h('listar_categorias', { title: 'Instalaciones de una empresa', acceso: 'todos', soloLectura: true }, 'Instalaciones (en los datos, «categorías») de una empresa con su modalidad de gestión y antelación de aviso. Útil para filtrar documentos o, en CMC, para crear uno.', { empresa: id, incluirArchivadas: z.boolean().optional() }, async (a, req) => {
     const e = await empresaVisible(req.user, a.empresa)
     if (!e) throw new AppError('Empresa no encontrada.', 404)
     const cats = await categoriasDeEmpresa(e.id, { archivadas: Boolean(a.incluirArchivadas) && esSuperAdmin(req.user) })
@@ -317,7 +318,7 @@ export const herramientas: Herramienta[] = [
   h(
     'listar_conversaciones',
     { title: 'Conversaciones', acceso: 'todos', soloLectura: true },
-    'Conversaciones de Comunicación (cliente y CMC), de la más reciente a la más antigua, con el último mensaje. «pendienteDeMiRespuesta» indica que el último mensaje es del otro lado. Filtros: empresa, estado, texto (asunto o mensajes), soloPendientes y, para CMC, soloMias (asignadas a mí).',
+    'Conversaciones de Comunicación (cliente y CMC), de la más reciente a la más antigua, con el último mensaje y los mensajes sin leer. «pendienteDeMiRespuesta» indica que el último mensaje es del otro lado. Filtros: empresa, estado, texto (asunto o mensajes), soloPendientes y, para CMC, soloMias (asignadas a mí).',
     { empresa: id.optional(), estado: z.enum(['abierto', 'resuelto']).optional(), texto: z.string().optional(), soloPendientes: z.boolean().optional(), soloMias: z.boolean().optional(), limite: z.number().optional() },
     async (a, req) => {
       const cmc = esSuperAdmin(req.user)
@@ -335,7 +336,7 @@ export const herramientas: Herramienta[] = [
         cond.push(`(LOWER(asunto) LIKE ${t} OR EXISTS (SELECT 1 FROM mensajes mb WHERE mb.hilo_id = hilos.id AND LOWER(mb.texto) LIKE ${t}))`)
       }
       const docs = await listarHilos(req.user, `${cond.length ? `AND ${cond.join(' AND ')} ` : ''}ORDER BY ultimo_mensaje DESC LIMIT ${Math.min(Number(a.limite) || 50, 200)}`, params)
-      const ultimos = await ultimosMensajes(docs.map((x) => x.id))
+      const [ultimos, sinLeer] = await Promise.all([ultimosMensajes(docs.map((x) => x.id)), noLeidos(req.user!.id, docs.map((x) => x.id))])
       const lista = docs.map((x) => {
         const u = ultimos.get(x.id)
         const pendiente = Boolean(x.estado !== 'resuelto' && u && (cmc ? !u.deCmc : u.deCmc))
@@ -345,20 +346,22 @@ export const herramientas: Herramienta[] = [
           empresa: (x.empresa as Empresa)?.razonSocial,
           empresaId: idDe(x.empresa),
           estado: x.estado,
-          sobre: typeof x.documento === 'object' && x.documento ? `Documento ${x.documento.id}: ${x.documento.titulo}` : typeof x.categoria === 'object' && x.categoria ? `Categoría: ${x.categoria.nombre}` : 'General',
+          sobre: typeof x.documento === 'object' && x.documento ? `Documento ${x.documento.id}: ${x.documento.titulo}` : typeof x.categoria === 'object' && x.categoria ? `Instalación: ${x.categoria.nombre}` : 'General',
           asignadoA: typeof x.asignado === 'object' && x.asignado ? x.asignado.nombre : null,
           mensajes: u?.total ?? 0,
           ultimoMensaje: u ? { fecha: fmtHora(u.fecha), autor: u.deCmc ? `${u.autor ?? 'CMC'} (CMC)` : u.autor, texto: u.texto.slice(0, 300) } : null,
           pendienteDeMiRespuesta: pendiente,
+          mensajesSinLeer: sinLeer.get(x.id) ?? 0,
         }
       })
       return a.soloPendientes ? lista.filter((x) => x.pendienteDeMiRespuesta) : lista
     },
   ),
-  h('ver_conversacion', { title: 'Leer conversación', acceso: 'todos', soloLectura: true }, 'Todos los mensajes de una conversación, en orden, con autor, fecha y adjuntos (con enlace de descarga temporal de 10 minutos).', { conversacion: id }, async (a, req) => {
+  h('ver_conversacion', { title: 'Leer conversación', acceso: 'todos', soloLectura: true }, 'Todos los mensajes de una conversación, en orden, con autor, fecha y adjuntos (con enlace de descarga temporal de 10 minutos). La marca como leída.', { conversacion: id }, async (a, req) => {
     const hilo = await hiloPorId(a.conversacion, req.user)
     if (!hilo) throw new AppError('Conversación no encontrada.', 404)
     const docs = await mensajesDeHilo(hilo.id)
+    await marcarLeido(hilo.id, req.user!.id)
     return {
       id: hilo.id,
       asunto: hilo.asunto,
@@ -479,7 +482,7 @@ export const herramientas: Herramienta[] = [
     await actualizarEmpresa(req, e.id, { activa: a.activa })
     return a.activa ? 'Empresa reactivada.' : 'Empresa dada de baja.'
   }),
-  h('crear_categoria', { title: 'Crear categoría', acceso: 'cmc' }, 'CMC: crea una categoría en una empresa. Comprueba el catálogo de nombres antes de añadir uno nuevo.', { empresa: id, nombre: z.string(), antelacionMeses: z.number().optional(), gestion: z.enum(['gestionado', 'no_gestionado']).optional(), descripcion: z.string().optional(), aceptarNombreNuevo: z.boolean().optional() }, async (a, req) => {
+  h('crear_categoria', { title: 'Crear instalación', acceso: 'cmc' }, 'CMC: crea una instalación (categoría) en una empresa. Comprueba el catálogo de nombres antes de añadir uno nuevo.', { empresa: id, nombre: z.string(), antelacionMeses: z.number().optional(), gestion: z.enum(['gestionado', 'no_gestionado']).optional(), descripcion: z.string().optional(), aceptarNombreNuevo: z.boolean().optional() }, async (a, req) => {
     soloCMC(req)
     const aviso = await comprobarNombre(req, 'categoria', a.nombre, a.aceptarNombreNuevo)
     if (aviso) return aviso
@@ -487,8 +490,8 @@ export const herramientas: Herramienta[] = [
       `INSERT INTO categorias (nombre, empresa_id, descripcion, antelacion_meses, gestion, orden, archivada, updated_at, created_at) VALUES ($1,$2,$3,$4,$5,0,$6,$7,$7) RETURNING id`,
       [a.nombre, Number(a.empresa), a.descripcion ?? null, a.antelacionMeses ?? null, a.gestion ?? null, bit(false), ahora()],
     )
-    await registrar(req, { accion: 'alta', descripcion: `Categoría «${a.nombre}» creada`, empresa: a.empresa, coleccion: 'categorias', registroId: c!.id })
-    return `Categoría ${c!.id} creada.`
+    await registrar(req, { accion: 'alta', descripcion: `Instalación «${a.nombre}» creada`, empresa: a.empresa, coleccion: 'categorias', registroId: c!.id })
+    return `Instalación ${c!.id} creada.`
   }),
   h(
     'crear_documento',
