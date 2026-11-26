@@ -57,7 +57,7 @@ export async function empresasDelUsuario(user: User, activa?: string) {
 }
 
 export const fmt = (d?: string | null) => (d ? new Date(d).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—')
-export const fmtHora = (d?: string | null) => (d ? new Date(d).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—')
+export const fmtHora = (d?: string | null) => (d ? new Date(d).toLocaleString('es-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—')
 
 export function diasHasta(d?: string | null) {
   if (!d) return null

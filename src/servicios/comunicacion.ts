@@ -9,7 +9,7 @@ import { ahora, ejecutar, filas, uno } from '@/lib/db'
 import { guardarFichero, leerFichero } from '@/lib/ficheros'
 import { crearPdf } from '@/lib/pdf'
 import { prepararFichero, type Fichero } from '@/lib/subidas'
-import { empresaVisible, hiloPorId, mensajesDeHilo } from '@/datos/consultas'
+import { categoriaPorId, documentoPorId, empresaVisible, hiloPorId, mensajesDeHilo } from '@/datos/consultas'
 import { crearEnvio } from '@/datos/operaciones'
 import { usuarioPorId } from '@/datos/usuarios'
 import { mapAdjunto } from '@/datos/mapas'
@@ -33,6 +33,16 @@ export async function subirAdjunto(req: Ctx, empresa: string | number, fichero: 
 export async function crearHilo(req: Ctx, d: { empresa: string | number; asunto: string; texto: string; documento?: string | number | null; categoria?: string | number | null; adjuntos?: (string | number)[] }) {
   if (!d.asunto?.trim()) throw new AppError('Indique el asunto.', 400)
   if (!puedeVerEmpresa(req.user, d.empresa)) throw new AppError('No tiene acceso a esa empresa.', 403)
+  if (!String(d.texto ?? '').trim()) throw new AppError('El mensaje está vacío.', 400)
+  // El documento o la categoría tienen que ser de la misma empresa (y visibles para quien escribe).
+  if (d.documento) {
+    const doc = await documentoPorId(d.documento, req.user)
+    if (!doc || String(idDe(doc.empresa)) !== String(d.empresa)) throw new AppError('Ese documento no es de esta empresa.', 400)
+  }
+  if (d.categoria) {
+    const cat = await categoriaPorId(d.categoria)
+    if (!cat || String(idDe(cat.empresa)) !== String(d.empresa)) throw new AppError('Esa categoría no es de esta empresa.', 400)
+  }
   const momento = ahora()
   const row = await uno<{ id: number }>(
     `INSERT INTO hilos (asunto, empresa_id, categoria_id, documento_id, estado, creado_por_id, ultimo_mensaje, updated_at, created_at) VALUES ($1,$2,$3,$4,'abierto',$5,$6,$6,$6) RETURNING id`,
@@ -108,7 +118,7 @@ export async function adjuntoAEnvio(req: Ctx, d: { adjunto: string | number; tit
       documentoRelacionado: d.documentoRelacionado ? Number(d.documentoRelacionado) : undefined,
       relacion: d.relacion || (d.documentoRelacionado ? 'Renovación' : 'Original'),
       nuevaCaducidad: d.nuevaCaducidad || undefined,
-      comentario: 'Enviado desde un adjunto de la comunicación con CMC',
+      comentario: 'Enviado desde un adjunto de Comunicación',
     },
     { data, name: adj.filename!, mimetype: adj.mimeType ?? 'application/octet-stream', size: data.length },
   )

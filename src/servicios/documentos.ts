@@ -10,10 +10,10 @@ import { ESTADOS, resolverGestion, type Estado } from '@/lib/estado'
 import { leerFichero } from '@/lib/ficheros'
 import { crearPdf } from '@/lib/pdf'
 import { archivoPorId, archivosDeDocumento, documentoPorId, empresaVisible, hidratarDocumentos, listarDocumentos } from '@/datos/consultas'
-import { filas } from '@/lib/db'
+import { filas, uno } from '@/lib/db'
 import { mapDocumento } from '@/datos/mapas'
 import { usuarioPorId } from '@/datos/usuarios'
-import type { Categoria, Documento, Empresa } from '@/datos/tipos'
+import type { Categoria, Documento, Empresa, User } from '@/datos/tipos'
 import { visible } from '@/datos/mapas'
 
 const idDe = (v: unknown) => (v && typeof v === 'object' && 'id' in v ? (v as { id: number | string }).id : (v as number | string))
@@ -32,6 +32,15 @@ export type Filtros = {
   orden?: string
 }
 
+const ESTADOS_VALIDOS = new Set<string>(['verde', 'amarillo', 'naranja', 'rojo', 'azul', 'negro'])
+
+/** AAAA-MM-DD a ISO; lo que no sea una fecha se ignora en lugar de romper la página. */
+export const fechaValida = (v?: string | null, hora = '') => {
+  if (!v || !/^\d{4}-\d{2}-\d{2}/.test(v)) return null
+  const d = new Date(`${v.slice(0, 10)}${hora}`)
+  return Number.isNaN(d.getTime()) ? null : d.toISOString()
+}
+
 export async function buscarDocumentos(req: Ctx, f: Filtros) {
   const partes = [`${visible(req.user, 'empresa_id')}`]
   const params: unknown[] = []
@@ -40,17 +49,27 @@ export async function buscarDocumentos(req: Ctx, f: Filtros) {
     partes.push(sql.replace('?', `$${params.length}`))
   }
   if (f.q?.trim()) {
-    const q = `%${f.q.trim()}%`
-    params.push(q, q, q, q)
-    const b = params.length
-    partes.push(`(titulo LIKE $${b - 3} OR referencia LIKE $${b - 2} OR organismo LIKE $${b - 1} OR observaciones LIKE $${b})`)
+    // LOWER en los dos lados: en Postgres LIKE distingue mayúsculas.
+    params.push(`%${f.q.trim().toLowerCase()}%`)
+    const b = `$${params.length}`
+    partes.push(`(LOWER(titulo) LIKE ${b} OR LOWER(referencia) LIKE ${b} OR LOWER(organismo) LIKE ${b} OR LOWER(observaciones) LIKE ${b})`)
   }
   if (f.empresa) add('empresa_id = ?', Number(f.empresa))
   if (f.categoria) add('categoria_id = ?', Number(f.categoria))
-  if (f.estados?.length) partes.push(`estado IN (${f.estados.map((e) => `'${e}'`).join(',')})`)
-  if (!(esSuperAdmin(req.user) && f.estados?.includes('azul'))) partes.push(`(estado IS NULL OR estado <> 'azul')`)
-  if (f.desde) add('fecha_caducidad >= ?', new Date(f.desde).toISOString())
-  if (f.hasta) add('fecha_caducidad <= ?', new Date(`${f.hasta}T23:59:59`).toISOString())
+  // Los estados llegan de la URL: solo se aceptan los conocidos y van como parámetros, nunca pegados al SQL.
+  const estados = (f.estados ?? []).filter((e) => ESTADOS_VALIDOS.has(e))
+  if (estados.length) {
+    const marcas = estados.map((e) => {
+      params.push(e)
+      return `$${params.length}`
+    })
+    partes.push(`estado IN (${marcas.join(',')})`)
+  }
+  if (!(esSuperAdmin(req.user) && estados.includes('azul'))) partes.push(`(estado IS NULL OR estado <> 'azul')`)
+  const desde = fechaValida(f.desde)
+  const hasta = fechaValida(f.hasta, 'T23:59:59')
+  if (desde) add('fecha_caducidad >= ?', desde)
+  if (hasta) add('fecha_caducidad <= ?', hasta)
   const orden = f.orden === '-createdAt' ? 'created_at DESC' : 'fecha_caducidad'
   const limite = Math.min(f.limite ?? 50, 500)
   const pagina = f.pagina ?? 1
@@ -75,6 +94,13 @@ export function enlaceFirmado(req: Ctx, datos: Descargable, minutos = 10) {
   return `${urlServidor()}/api/descarga?t=${encodeURIComponent(t)}`
 }
 
+/** Envío o adjunto de una empresa visible para el usuario (mismo filtro que el resto del portal). */
+async function ficheroVisible(coleccion: 'envios' | 'adjuntos', id: string, user: User) {
+  const row = await uno<Record<string, unknown>>(`SELECT id, empresa_id, filename, mime_type FROM ${coleccion} WHERE id = $1 AND ${visible(user, 'empresa_id')}`, [Number(id)])
+  if (!row?.filename) return null
+  return { id: Number(row.id), empresa: Number(row.empresa_id), filename: String(row.filename), mimeType: row.mime_type == null ? null : String(row.mime_type) }
+}
+
 export async function resolverEnlace(req: Ctx, token: string, historialFn: (req: Ctx, d: { empresa: string; documento?: string }) => Promise<{ data: Buffer; nombre: string; mime: string }>) {
   const datos = leerTokenFirmado<Descargable & { u: string }>(token, 'descarga')
   if (!datos) throw new AppError('El enlace ha caducado. Pida uno nuevo.', 410)
@@ -84,7 +110,7 @@ export async function resolverEnlace(req: Ctx, token: string, historialFn: (req:
   if (datos.k === 'zip') return { data: await zipDocumentos(req, datos.ids, datos.h), nombre: `Documentos ${new Date().toISOString().slice(0, 10)}.zip`, mime: 'application/zip' }
   if (datos.k === 'inventario') return inventario(req, datos.e, datos.f)
   if (datos.k === 'historial') return historialFn(req, { empresa: datos.e, documento: datos.d })
-  const reg = datos.c === 'archivos' ? await archivoPorId(datos.i, user) : null
+  const reg = datos.c === 'archivos' ? await archivoPorId(datos.i, user) : await ficheroVisible(datos.c, datos.i, user)
   if (!reg?.filename) throw new AppError('No tiene acceso a este archivo.', 403)
   const data = await leerFichero(datos.c, reg)
   await registrar(req, { accion: 'descarga', descripcion: `Descarga por enlace temporal de «${reg.filename}»`, empresa: idDe(reg.empresa), coleccion: datos.c, registroId: reg.id })

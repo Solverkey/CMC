@@ -1,10 +1,13 @@
 import { headers } from 'next/headers'
+import path from 'path'
+import { esSuperAdmin } from '@/access'
+import { visible } from '@/datos/mapas'
 import { registrar } from '@/lib/actividad'
 import { AppError, errorJson } from '@/lib/appError'
 import { sugerir } from '@/lib/catalogo'
 import { firmar, igualSeguro } from '@/lib/cifrado'
 import type { Ctx } from '@/lib/ctx'
-import { ahora, ejecutar } from '@/lib/db'
+import { ahora, ejecutar, uno } from '@/lib/db'
 import { leerFichero, tipoPorNombre } from '@/lib/ficheros'
 import { verificarPassword } from '@/lib/clave'
 import { leerSesion, escribirSesion, borrarSesion } from '@/lib/sesion'
@@ -17,6 +20,9 @@ import { activar2FA, comprobarCodigoLogin, desactivar2FA, iniciar2FA } from '@/s
 import { aceptarInvitacion, pedirRestablecer, restablecerPassword, validarPassword } from '@/servicios/usuarios'
 
 export const dynamic = 'force-dynamic'
+
+const PUBLICOS = new Set(['media', 'videos'])
+const PRIVADOS = new Set(['archivos', 'envios', 'adjuntos', 'originales'])
 
 const json = (datos: unknown, status = 200) => Response.json(datos, { status })
 
@@ -54,7 +60,17 @@ async function login(req: Request) {
     throw new AppError('Correo o contraseña incorrectos.', 401)
   }
   if (u.activo === false) throw new AppError('Esta cuenta está dada de baja.', 403)
-  const paso = comprobarCodigoLogin(u, b.codigo)
+  let paso: number | null
+  try {
+    paso = comprobarCodigoLogin(u, b.codigo)
+  } catch (e) {
+    // Un código erróneo cuenta como intento fallido: si no, el doble factor se podría probar sin límite.
+    if (typeof b.codigo === 'string' && b.codigo.trim()) {
+      await anotarFallo(u.id)
+      await registrar(ctxLogin, { accion: 'login_fallido', descripcion: `Código de doble factor incorrecto de ${u.email}`, usuario: u })
+    }
+    throw e
+  }
   if (u.rol !== 'superadmin' && !(u.empresas ?? []).some((m) => typeof m.empresa === 'object' && m.empresa.activa !== false)) {
     throw new AppError('No tiene ninguna empresa activa.', 403)
   }
@@ -122,8 +138,16 @@ async function atender(req: Request, slug: string[]) {
   if (req.method === 'POST' && ruta === 'oauth/revocar') return revocar(req)
 
   if (req.method === 'GET' && slug[0] === 'ficheros' && slug.length === 3) {
-    const nombre = decodeURIComponent(slug[2])
-    const data = await leerFichero(slug[1], { filename: nombre })
+    const coleccion = slug[1]
+    const nombre = path.basename(decodeURIComponent(slug[2]))
+    if (!PUBLICOS.has(coleccion) && !PRIVADOS.has(coleccion)) throw new AppError('No encontrado.', 404)
+    // Logotipos e imágenes de la web son públicos; los documentos de las empresas solo los ve quien tiene acceso a su empresa.
+    if (PRIVADOS.has(coleccion)) {
+      const user = exigir(ctx)
+      const reg = await uno(`SELECT id FROM ${coleccion} WHERE filename = $1 AND ${visible(user, 'empresa_id')} LIMIT 1`, [nombre])
+      if (!reg) throw new AppError('No tiene acceso a este archivo.', 403)
+    }
+    const data = await leerFichero(coleccion, { filename: nombre })
     const headers: Record<string, string> = {
       'Content-Type': tipoPorNombre(nombre),
       'Cache-Control': 'private, max-age=60',
@@ -175,6 +199,7 @@ async function atender(req: Request, slug: string[]) {
   }
 
   if (req.method === 'GET' && ruta === 'almacenamiento') {
+    if (!esSuperAdmin(exigir(ctx))) throw new AppError('Solo CMC.', 403)
     const { almacenamiento } = await import('@/lib/estadisticas')
     return json(await almacenamiento())
   }

@@ -64,7 +64,7 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
         </div>
         <div className="row">
           {vigente?.url && <BotonDescarga url={vigente.url} nombre={vigente.filename} className="btn btn--primary"><Icon name="download" />Descargar</BotonDescarga>}
-          {!cmc && <Link href={`/portal/mensajes/nuevo?empresa=${empresa.id}&documento=${doc.id}`} className="btn btn--secondary"><Icon name="chat" />Preguntar a CMC</Link>}
+          <Link href={`/portal/mensajes/nuevo?empresa=${empresa.id}&documento=${doc.id}`} className="btn btn--secondary"><Icon name="chat" />{cmc ? 'Escribir al cliente' : 'Preguntar a CMC'}</Link>
           {cmc && (
             <EditarDocumento
               id={String(doc.id)}

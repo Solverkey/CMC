@@ -1,6 +1,6 @@
 import { empresasDe, esSuperAdmin } from '@/access'
 import type { Archivo, Categoria, Documento, Empresa, Envio, Hilo, Mensaje, User } from './tipos'
-import { filas, uno } from '@/lib/db'
+import { esPostgres, filas, uno } from '@/lib/db'
 import { urlDe } from '@/lib/ficheros'
 import { mapActividad, mapArchivo, mapCategoria, mapCorreo, mapDocumento, mapEmpresa, mapEnvio, mapHilo, mapMensaje, mapUser, visible } from './mapas'
 
@@ -202,9 +202,22 @@ export async function correosDeEmpresa(empresaId: number | string, limite = 50) 
   return rows.map(mapCorreo)
 }
 
+/**
+ * Qué parte del registro de actividad ve cada uno. CMC: todo. Administrador de empresa: lo de las empresas que administra
+ * y sus propios accesos. Lo que no es de ninguna empresa (accesos de otros, consultas de la web) solo lo ve CMC.
+ */
+export function filtroActividad(user: User | null) {
+  if (!user) return 'TRUE'
+  if (esSuperAdmin(user)) return 'TRUE'
+  const propios = `(empresa_id IS NULL AND usuario_id = ${Number(user.id)})`
+  const admin = empresasDe(user, true).map(Number).filter((n) => Number.isFinite(n))
+  if (!admin.length) return propios
+  const activa = esPostgres ? 'true' : '1'
+  return `((empresa_id IN (${admin.join(',')}) AND EXISTS (SELECT 1 FROM empresas ev WHERE ev.id = empresa_id AND ev.activa = ${activa})) OR ${propios})`
+}
+
 export async function listarActividad(user: User | null, sqlExtra: string, params: unknown[] = [], limite = 100, offset = 0) {
-  const filtro = user ? visible(user, 'empresa_id') : 'TRUE'
-  const rows = await filas<Fila>(`SELECT * FROM actividad WHERE (${filtro} OR empresa_id IS NULL) ${sqlExtra} ORDER BY created_at DESC LIMIT ${Number(limite)} OFFSET ${Number(offset)}`, params)
+  const rows = await filas<Fila>(`SELECT * FROM actividad WHERE ${filtroActividad(user)} ${sqlExtra} ORDER BY created_at DESC LIMIT ${Number(limite)} OFFSET ${Number(offset)}`, params)
   return rows.map(mapActividad)
 }
 
@@ -216,4 +229,55 @@ export async function contar(tabla: string, where: string, params: unknown[] = [
 export async function usuariosCms() {
   const rows = await filas<Fila>(`SELECT id, nombre, email, rol FROM users WHERE rol = 'superadmin' AND (activo IS NULL OR activo IS NOT FALSE) ORDER BY nombre`)
   return rows.map((r) => ({ id: Number(r.id), nombre: String(r.nombre), email: String(r.email) }))
+}
+
+export type UltimoMensaje = { texto: string; autor: string | null; deCmc: boolean; fecha: string; total: number }
+
+/**
+ * Último mensaje y número de mensajes de cada conversación, para la bandeja.
+ * Sirve para mostrar el extracto y saber de qué lado está la pelota.
+ */
+export async function ultimosMensajes(hiloIds: (number | string)[]): Promise<Map<number, UltimoMensaje>> {
+  const unicos = ids(hiloIds)
+  const mapa = new Map<number, UltimoMensaje>()
+  if (!unicos.length) return mapa
+  const lista = unicos.join(',')
+  const [ultimos, totales] = await Promise.all([
+    filas<Fila>(
+      `SELECT m.hilo_id, m.texto, m.created_at, u.nombre, u.rol
+         FROM mensajes m LEFT JOIN users u ON u.id = m.autor_id
+        WHERE m.hilo_id IN (${lista})
+          AND m.id = (SELECT m2.id FROM mensajes m2 WHERE m2.hilo_id = m.hilo_id ORDER BY m2.created_at DESC, m2.id DESC LIMIT 1)`,
+    ),
+    filas<Fila>(`SELECT hilo_id, COUNT(*) AS n FROM mensajes WHERE hilo_id IN (${lista}) GROUP BY hilo_id`),
+  ])
+  const porHilo = new Map(totales.map((t) => [Number(t.hilo_id), Number(t.n)]))
+  for (const r of ultimos) {
+    mapa.set(Number(r.hilo_id), {
+      texto: String(r.texto ?? ''),
+      autor: r.nombre == null ? null : String(r.nombre),
+      deCmc: r.rol === 'superadmin',
+      fecha: String(r.created_at),
+      total: porHilo.get(Number(r.hilo_id)) ?? 0,
+    })
+  }
+  return mapa
+}
+
+/**
+ * Conversaciones abiertas cuyo último mensaje es del otro lado: para CMC, las que escribió el cliente;
+ * para el cliente, las que contestó CMC. Es el contador del menú.
+ */
+export async function contarPendientesDeRespuesta(user: User) {
+  const otroLado = esSuperAdmin(user) ? "COALESCE(u.rol, 'cliente') <> 'superadmin'" : "u.rol = 'superadmin'"
+  const row = await uno<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM hilos h
+      WHERE h.estado = 'abierto' AND ${visible(user, 'h.empresa_id')}
+        AND EXISTS (
+          SELECT 1 FROM mensajes m LEFT JOIN users u ON u.id = m.autor_id
+           WHERE m.hilo_id = h.id AND ${otroLado}
+             AND m.id = (SELECT m2.id FROM mensajes m2 WHERE m2.hilo_id = h.id ORDER BY m2.created_at DESC, m2.id DESC LIMIT 1)
+        )`,
+  )
+  return Number(row?.n ?? 0)
 }

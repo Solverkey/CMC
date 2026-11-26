@@ -1,6 +1,6 @@
 # CMC · Web y portal documental
 
-Web pública de CMC y portal documental en **Next.js 16 + Payload CMS 3**. El portal sigue el *Informe funcional — Portal documental CMC v1.0* (Solverkey).
+Web pública de CMC y portal documental en **Next.js 16** con SQL directo (Postgres de Supabase en producción, SQLite en local). El portal sigue el *Informe funcional — Portal documental CMC v1.0* (Solverkey).
 
 ## Web pública
 
@@ -56,14 +56,14 @@ El doble factor es obligatorio para los super administradores salvo que `CMC_2FA
 | `/portal/documentos` | Buscador con filtros, descarga en ZIP y exportación del inventario a Excel o PDF | RF-09, RF-16, RF-19 |
 | `/portal/documentos/:id` | Ficha, archivo vigente, histórico, conversaciones y envío de renovaciones | RF-05, RF-08 |
 | `/portal/enviar` | Envío a CMC (cliente) y bandeja de revisión (CMC) | RF-25 |
-| `/portal/mensajes` | Canal de comunicación por conversaciones, con adjuntos, estado, asignación y exportación | RF-26 |
+| `/portal/mensajes` | **Comunicación**, como un correo: conversaciones a la izquierda y mensajes a la derecha, con adjuntos, estado, asignación, búsqueda en los mensajes y exportación. El menú cuenta las conversaciones que esperan respuesta de ese lado | RF-26 |
 | `/portal/avisos` | Avisos programados y correos enviados, con su estado de entrega | RF-17, RF-18 |
 | `/portal/usuarios` | El administrador de empresa invita, cambia roles y retira accesos | RF-03, RF-04 |
 | `/portal/actividad` | Registro de actividad inalterable (también lo hecho desde la IA) | RF-20 |
 | `/portal/almacenamiento` | Espacio usado, por empresa, y aviso al acercarse al límite | RF-23 |
 | `/portal/asistentes` | Conexión de asistentes de IA (MCP) y revocación de accesos | RF-27 |
 | `/portal/seguridad` | Doble factor y contraseña | RF-01 |
-| `/admin` | Panel de Payload para CMC: empresas, categorías, documentos, catálogos y la **Configuración** global (avisos, plantillas de correo, imágenes, almacenamiento, plantilla de categorías) | RF-06, RF-21, RF-22, RF-28 |
+| `/portal/selectores`, `/portal/configuracion` | CMC: catálogos de nombres y **Configuración** global (avisos, plantillas de correo, imágenes, almacenamiento, plantilla de categorías) | RF-06, RF-21, RF-22, RF-28 |
 
 ## Servidor MCP (RF-27)
 
@@ -71,11 +71,23 @@ Dirección: `https://<portal>/api/mcp`. El asistente se autoriza con OAuth 2.1 +
 El asistente actúa siempre con los permisos del usuario, pide confirmación (`confirmar=true`) para las acciones importantes y todo queda en el registro con origen «Asistente de IA».
 Las herramientas están en `src/mcp/herramientas.ts` y usan los mismos servicios que el portal (`src/servicios`).
 
+Cada herramienta declara quién puede usarla, y el servidor solo enseña (`tools/list`) y deja ejecutar las del rol del usuario:
+
+| Rol | Qué puede hacer su asistente |
+|---|---|
+| Usuario de empresa | Consultar sus empresas, resumen del panel, documentos, vencimientos, avisos, categorías, envíos y conversaciones (con adjuntos); descargar; enviar documentos a CMC y escribir mensajes |
+| Administrador de empresa | Lo anterior, más usuarios de sus empresas (alta, rol, baja) y registro de actividad de las empresas que administra |
+| CMC (super administrador con doble factor) | Todo: empresas, categorías, documentos, archivos, bandeja de envíos, estados, modalidad de gestión, conversaciones de todas las empresas y almacenamiento |
+
+Además, cada servicio vuelve a comprobar el acceso a la empresa concreta. El transporte es *Streamable HTTP* sin SSE (versiones del protocolo 2025-06-18, 2025-03-26 y 2024-11-05). `quien_soy` devuelve el rol y las herramientas disponibles.
+
 ## Estructura
 
-- `src/collections`: modelo de datos y reglas (empresas, usuarios, categorías, documentos, archivos, envíos, conversaciones, catálogo, correos, actividad).
+- `src/datos`: tipos, consultas y operaciones en SQL (empresas, usuarios, categorías, documentos, archivos, envíos, conversaciones, catálogo, correos, actividad). `src/lib/db.ts` habla con Postgres o SQLite.
 - `src/access`: aislamiento por empresa, que se aplica siempre en el servidor.
 - `src/servicios`: operaciones compartidas por el portal, la API y el MCP.
+- `src/mcp`: servidor MCP (herramientas por rol, claves y OAuth).
+- `src/components/comunicacion`: bandeja de Comunicación.
 - `src/jobs`: recálculo nocturno de estados y avisos (03:00), resumen semanal (lunes 07:00) y cola de correos con reintentos.
 - `src/lib/estado.ts` y `src/lib/avisos.ts`: semáforo y secuencia de recordatorios.
 
