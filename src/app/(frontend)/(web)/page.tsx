@@ -1,3 +1,4 @@
+import { urlServidor } from '@/lib/url'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Icon } from '@/components/Icon'
@@ -25,7 +26,7 @@ export default async function Inicio() {
     name: web.legal.titular,
     description: web.descripcion,
     email: web.email,
-    url: process.env.NEXT_PUBLIC_SERVER_URL || undefined,
+    url: urlServidor(),
     foundingDate: '2000',
     address: web.sedes.map((s) => ({ '@type': 'PostalAddress', streetAddress: s.direccion, addressLocality: s.ciudad, postalCode: s.codigoPostal.split(' ')[0], addressCountry: 'ES' })),
     telephone: web.sedes.map((s) => `+34 ${s.telefono}`),

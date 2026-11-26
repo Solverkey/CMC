@@ -1,6 +1,7 @@
+import { urlServidor } from '@/lib/url'
 import type { MetadataRoute } from 'next'
 
-const base = (process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000').replace(/\/$/, '')
+const base = urlServidor()
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const rutas: [string, number][] = [
