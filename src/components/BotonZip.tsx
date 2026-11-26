@@ -1,10 +1,24 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Icon } from './Icon'
 
-/** Descarga en un ZIP los documentos marcados en el formulario indicado (RF-09). */
+const marcados = (formId: string) => Array.from(document.querySelectorAll<HTMLInputElement>(`#${formId} input[name=ids]:checked`))
+
+/**
+ * Barra de selección de la lista de documentos: aparece al marcar alguno, dice cuántos hay
+ * y los descarga en un ZIP (RF-09), con o sin el histórico.
+ */
 export function BotonZip({ formId }: { formId: string }) {
+  const [n, setN] = useState(0)
   const [estado, setEstado] = useState<string | null>(null)
+
+  useEffect(() => {
+    const form = document.getElementById(formId)
+    if (!form) return
+    const contar = () => setN(marcados(formId).length)
+    form.addEventListener('change', contar)
+    return () => form.removeEventListener('change', contar)
+  }, [formId])
 
   async function descargar() {
     const form = document.getElementById(formId) as HTMLFormElement | null
@@ -24,12 +38,22 @@ export function BotonZip({ formId }: { formId: string }) {
     setEstado(null)
   }
 
+  function quitar() {
+    document.querySelectorAll<HTMLInputElement>(`#${formId} input[type=checkbox]`).forEach((c) => {
+      if (c.name !== 'historico') c.checked = false
+    })
+    setN(0)
+    setEstado(null)
+  }
+
   return (
-    <span className="row">
+    <div className="seleccion" hidden={n === 0} role="region" aria-label="Documentos seleccionados">
+      <strong>{n} {n === 1 ? 'documento seleccionado' : 'documentos seleccionados'}</strong>
       <label className="small row" style={{ gap: 6 }}><input type="checkbox" name="historico" form={formId} />Incluir histórico</label>
-      <button type="button" className="btn btn--secondary btn--sm" onClick={descargar}><Icon name="download" />Descargar seleccionados (ZIP)</button>
-      {estado && <span className="small muted" role="status">{estado}</span>}
-    </span>
+      <button type="button" className="btn btn--primary btn--sm" onClick={descargar}><Icon name="download" />Descargar ZIP</button>
+      <button type="button" className="btn btn--ghost btn--sm" onClick={quitar}>Quitar selección</button>
+      {estado && <span className="small" role="status">{estado}</span>}
+    </div>
   )
 }
 
@@ -38,7 +62,10 @@ export function MarcarTodos({ formId }: { formId: string }) {
     <input
       type="checkbox"
       aria-label="Marcar todos"
-      onChange={(e) => document.querySelectorAll<HTMLInputElement>(`#${formId} input[name=ids]`).forEach((c) => (c.checked = e.target.checked))}
+      onChange={(e) => {
+        document.querySelectorAll<HTMLInputElement>(`#${formId} input[name=ids]`).forEach((c) => (c.checked = e.target.checked))
+        document.getElementById(formId)?.dispatchEvent(new Event('change', { bubbles: true }))
+      }}
     />
   )
 }

@@ -9,7 +9,7 @@ import { urlServidor } from '@/lib/configuracion'
 import { ESTADOS, resolverGestion, type Estado } from '@/lib/estado'
 import { leerFichero } from '@/lib/ficheros'
 import { crearPdf } from '@/lib/pdf'
-import { archivoPorId, archivosDeDocumento, documentoPorId, empresaVisible, hidratarDocumentos, listarDocumentos } from '@/datos/consultas'
+import { archivoPorId, archivosDeDocumento, empresaVisible, hidratarDocumentos, listarDocumentos } from '@/datos/consultas'
 import { filas, uno } from '@/lib/db'
 import { mapDocumento } from '@/datos/mapas'
 import { usuarioPorId } from '@/datos/usuarios'
@@ -41,7 +41,39 @@ export const fechaValida = (v?: string | null, hora = '') => {
   return Number.isNaN(d.getTime()) ? null : d.toISOString()
 }
 
+/** Orden de la lista. Por defecto, lo urgente primero: caducados, no legalizados, caducidad próxima, condicionados. */
+export const ORDENES = {
+  urgencia: { texto: 'Urgencia', sql: "CASE estado WHEN 'rojo' THEN 0 WHEN 'negro' THEN 1 WHEN 'amarillo' THEN 2 WHEN 'naranja' THEN 3 WHEN 'verde' THEN 4 ELSE 5 END, fecha_caducidad IS NULL, fecha_caducidad, titulo" },
+  caducidad: { texto: 'Fecha de caducidad', sql: 'fecha_caducidad IS NULL, fecha_caducidad, titulo' },
+  nombre: { texto: 'Nombre', sql: 'LOWER(titulo), id' },
+  recientes: { texto: 'Últimos añadidos', sql: 'created_at DESC, id DESC' },
+} as const
+export type Orden = keyof typeof ORDENES
+
+/** Cuántos documentos hay de cada color con los demás filtros: los botones de estado de la lista. */
+export async function contarPorEstado(req: Ctx, f: Filtros) {
+  const { where, params } = condiciones(req, f, { conEstados: false })
+  const rows = await filas<{ estado: string | null; n: number }>(`SELECT estado, COUNT(*) AS n FROM documentos WHERE ${where} GROUP BY estado`, params)
+  const cuenta: Record<string, number> = {}
+  for (const r of rows) cuenta[r.estado ?? 'verde'] = (cuenta[r.estado ?? 'verde'] ?? 0) + Number(r.n)
+  return cuenta
+}
+
 export async function buscarDocumentos(req: Ctx, f: Filtros) {
+  const { where, params } = condiciones(req, f)
+  const orden = f.orden === '-createdAt' ? ORDENES.recientes.sql : (ORDENES[f.orden as Orden] ?? ORDENES.urgencia).sql
+  const limite = Math.min(f.limite ?? 50, 500)
+  const pagina = f.pagina ?? 1
+  const rows = await filas<Record<string, unknown>>(`SELECT * FROM documentos WHERE ${where} ORDER BY ${orden} LIMIT ${limite} OFFSET ${(pagina - 1) * limite}`, params)
+  const total = await filas<{ n: number }>(`SELECT COUNT(*) AS n FROM documentos WHERE ${where}`, params)
+  const docs = await hidratarDocumentos(rows.map(mapDocumento))
+  const totalDocs = Number(total[0]?.n ?? docs.length)
+  const totalPages = Math.max(Math.ceil(totalDocs / limite), 1)
+  return { docs, totalDocs, totalPages, hasPrevPage: pagina > 1, hasNextPage: pagina * limite < totalDocs }
+}
+
+/** Condiciones de la búsqueda. Sin `conEstados`, sirven para contar cuántos hay de cada color con los demás filtros. */
+function condiciones(req: Ctx, f: Filtros, { conEstados = true } = {}) {
   const partes = [`${visible(req.user, 'empresa_id')}`]
   const params: unknown[] = []
   const add = (sql: string, valor?: unknown) => {
@@ -57,7 +89,7 @@ export async function buscarDocumentos(req: Ctx, f: Filtros) {
   if (f.empresa) add('empresa_id = ?', Number(f.empresa))
   if (f.categoria) add('categoria_id = ?', Number(f.categoria))
   // Los estados llegan de la URL: solo se aceptan los conocidos y van como parámetros, nunca pegados al SQL.
-  const estados = (f.estados ?? []).filter((e) => ESTADOS_VALIDOS.has(e))
+  const estados = conEstados ? (f.estados ?? []).filter((e) => ESTADOS_VALIDOS.has(e)) : []
   if (estados.length) {
     const marcas = estados.map((e) => {
       params.push(e)
@@ -65,21 +97,14 @@ export async function buscarDocumentos(req: Ctx, f: Filtros) {
     })
     partes.push(`estado IN (${marcas.join(',')})`)
   }
-  if (!(esSuperAdmin(req.user) && estados.includes('azul'))) partes.push(`(estado IS NULL OR estado <> 'azul')`)
+  // Los archivados (azul) solo los ve CMC: al buscar, si los pide; al contar, siempre.
+  const cmc = esSuperAdmin(req.user)
+  if (!cmc || (conEstados && !estados.includes('azul'))) partes.push(`(estado IS NULL OR estado <> 'azul')`)
   const desde = fechaValida(f.desde)
   const hasta = fechaValida(f.hasta, 'T23:59:59')
   if (desde) add('fecha_caducidad >= ?', desde)
   if (hasta) add('fecha_caducidad <= ?', hasta)
-  const orden = f.orden === '-createdAt' ? 'created_at DESC' : 'fecha_caducidad'
-  const limite = Math.min(f.limite ?? 50, 500)
-  const pagina = f.pagina ?? 1
-  const where = partes.join(' AND ')
-  const rows = await filas<Record<string, unknown>>(`SELECT * FROM documentos WHERE ${where} ORDER BY ${orden} LIMIT ${limite} OFFSET ${(pagina - 1) * limite}`, params)
-  const total = await filas<{ n: number }>(`SELECT COUNT(*) AS n FROM documentos WHERE ${where}`, params)
-  const docs = await hidratarDocumentos(rows.map(mapDocumento))
-  const totalDocs = Number(total[0]?.n ?? docs.length)
-  const totalPages = Math.max(Math.ceil(totalDocs / limite), 1)
-  return { docs, totalDocs, totalPages, hasPrevPage: pagina > 1, hasNextPage: pagina * limite < totalDocs }
+  return { where: partes.join(' AND '), params }
 }
 
 export type Descargable =

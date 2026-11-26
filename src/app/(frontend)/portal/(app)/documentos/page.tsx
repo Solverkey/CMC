@@ -1,203 +1,188 @@
 import Link from 'next/link'
+import { Suspense } from 'react'
 import { BotonZip, MarcarTodos } from '@/components/BotonZip'
-import { claseFila } from '@/components/MarcaEstado'
 import { EnviarCmc } from '@/components/EnviarCmc'
+import { FiltrosDocumentos } from '@/components/FiltrosDocumentos'
 import { Icon } from '@/components/Icon'
+import { SubirDocumento } from '@/components/SubirDocumento'
 import { ESTADOS, resolverGestion, type Estado } from '@/lib/estado'
+import { plazo } from '@/lib/plazo'
 import { categoriasDeEmpresa, listarEnvios } from '@/datos/consultas'
-import type { Categoria, Documento, Empresa, Envio } from '@/datos/tipos'
+import type { Categoria, Documento, Empresa } from '@/datos/tipos'
 import { contexto, diasHasta, empresasDelUsuario, fmt, fmtHora } from '@/lib/payload'
-import { buscarDocumentos } from '@/servicios/documentos'
+import { leerConfiguracion } from '@/lib/configuracion'
+import { buscarDocumentos, contarPorEstado, ORDENES } from '@/servicios/documentos'
 
 export const metadata = { title: 'Documentos' }
 
-type SP = { q?: string; empresa?: string; categoria?: string; estado?: string | string[]; desde?: string; hasta?: string; pagina?: string; orden?: string }
+type SP = { subir?: string; q?: string; empresa?: string; categoria?: string; estado?: string | string[]; desde?: string; hasta?: string; pagina?: string; orden?: string }
 
-const FILTROS: Estado[] = ['verde', 'amarillo', 'naranja', 'rojo', 'azul', 'negro']
+/** Orden de los botones de estado: lo que pide atención primero. */
+const CHIPS: Estado[] = ['rojo', 'negro', 'amarillo', 'naranja', 'verde', 'azul']
 
 export default async function DocumentosPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams
   const { user, req, cmc } = await contexto('/portal/documentos')
   const { empresas, empresa } = await empresasDelUsuario(user, sp.empresa)
-  const estados = ([] as string[]).concat(sp.estado ?? []).filter(Boolean) as Estado[]
+  const estados = ([] as string[]).concat(sp.estado ?? []).filter((e): e is Estado => e in ESTADOS)
   const pagina = Math.max(Number(sp.pagina) || 1, 1)
-  const destino = !cmc ? empresa : null
-  // Con una sola empresa no hace falta elegirla: el filtro de instalación y la exportación se ofrecen igual.
+  // Con una sola empresa no hace falta elegirla: el filtro de instalación, la exportación y la subida se ofrecen igual.
   const empresaFiltro = sp.empresa || (empresas.length === 1 ? String(empresas[0].id) : '')
+  const empresaActiva = empresaFiltro ? (empresas.find((e) => String(e.id) === empresaFiltro) ?? empresa) : null
+  const filtros = { q: sp.q, empresa: sp.empresa, categoria: sp.categoria, desde: sp.desde, hasta: sp.hasta }
 
-  const [r, categorias, categoriasEnvio, envios] = await Promise.all([
-    buscarDocumentos(req, { q: sp.q, empresa: sp.empresa, categoria: sp.categoria, estados, desde: sp.desde, hasta: sp.hasta, limite: 50, pagina, orden: sp.orden || 'fechaCaducidad' }),
+  const [r, cuenta, categorias, envios, cfg] = await Promise.all([
+    buscarDocumentos(req, { ...filtros, estados, limite: 50, pagina, orden: sp.orden }),
+    contarPorEstado(req, filtros),
     empresaFiltro ? categoriasDeEmpresa(empresaFiltro, { archivadas: cmc }) : null,
-    destino ? categoriasDeEmpresa(destino.id, { archivadas: false }) : null,
-    !cmc ? listarEnvios(user, `${sp.empresa ? 'AND empresa_id = $1 ' : ''}ORDER BY created_at DESC`, sp.empresa ? [Number(sp.empresa)] : [], 50) : null,
+    !cmc ? listarEnvios(user, `${sp.empresa ? 'AND empresa_id = $1 ' : ''}ORDER BY created_at DESC`, sp.empresa ? [Number(sp.empresa)] : [], 20) : null,
+    leerConfiguracion(),
   ])
   const docs = r.docs as Documento[]
-  const enlace = (p: number) => {
+  const conEmpresa = empresas.length > 1 && !sp.empresa
+  const total = Object.entries(cuenta).filter(([e]) => cmc || e !== 'azul').reduce((s, [, n]) => s + n, 0)
+  const hayFiltros = Boolean(sp.q || sp.categoria || sp.desde || sp.hasta || estados.length)
+
+  const enlace = (cambios: Record<string, string | null>) => {
     const u = new URLSearchParams()
-    for (const [k, v] of Object.entries(sp)) for (const x of ([] as string[]).concat(v ?? [])) if (k !== 'pagina') u.append(k, x)
-    u.set('pagina', String(p))
-    return `?${u}`
+    for (const [k, v] of Object.entries(sp)) for (const x of ([] as string[]).concat(v ?? [])) if (k !== 'pagina' && k !== 'subir' && !(k in cambios)) u.append(k, x)
+    for (const [k, v] of Object.entries(cambios)) if (v) u.set(k, v)
+    const qs = u.toString()
+    return `/portal/documentos${qs ? `?${qs}` : ''}`
   }
+  const mesesDe = (cat?: Categoria | null) => (typeof cat?.antelacionMeses === 'number' ? cat.antelacionMeses : typeof empresaActiva?.antelacionMeses === 'number' ? empresaActiva.antelacionMeses : cfg.antelacionMeses)
 
   return (
     <>
-      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-end' }}>
+      <header className="cabecera-docs">
         <div className="stack" style={{ gap: 4 }}>
-          <p className="small muted">{r.totalDocs} documentos</p>
-          <h1>Buscar documentos</h1>
+          <p className="small muted">{empresaActiva ? empresaActiva.razonSocial : cmc ? 'Todas las empresas' : 'Todas sus empresas'}</p>
+          <h1>Documentos</h1>
+          <p className="muted">
+            {cmc
+              ? 'Inventario de las empresas cliente, con su estado y caducidad.'
+              : 'Su documentación con su estado y su caducidad. Lo urgente aparece primero.'}
+          </p>
         </div>
         <div className="row">
-          {empresaFiltro && (
-            <>
-              <a href={`/api/inventario/${empresaFiltro}?formato=xlsx`} className="btn btn--secondary btn--sm"><Icon name="download" />Excel</a>
-              <a href={`/api/inventario/${empresaFiltro}?formato=pdf`} className="btn btn--secondary btn--sm"><Icon name="download" />PDF</a>
-            </>
+          {empresaActiva && (
+            <div className="row" style={{ gap: 6 }} aria-label="Exportar inventario">
+              <a href={`/api/inventario/${empresaActiva.id}?formato=xlsx`} className="btn btn--secondary btn--sm"><Icon name="download" />Excel</a>
+              <a href={`/api/inventario/${empresaActiva.id}?formato=pdf`} className="btn btn--secondary btn--sm"><Icon name="download" />PDF</a>
+            </div>
           )}
-          {destino && (
-            <EnviarCmc
-              empresaId={String(destino.id)}
-              empresaNombre={destino.razonSocial}
-              categorias={(categoriasEnvio ?? []).map((c) => ({ id: String(c.id), nombre: c.nombre }))}
+          {!cmc && empresaActiva && (
+            <EnviarCmc empresaId={String(empresaActiva.id)} empresaNombre={empresaActiva.razonSocial} categorias={(categorias ?? []).filter((c) => !c.archivada).map((c) => ({ id: String(c.id), nombre: c.nombre }))} abrirAlCargar={sp.subir === '1'} />
+          )}
+          {cmc && empresaActiva && (
+            <SubirDocumento
+              empresaId={String(empresaActiva.id)}
+              categorias={(categorias ?? []).filter((c) => !c.archivada).map((c) => ({ id: String(c.id), nombre: c.nombre }))}
+              meses={mesesDe(null)}
+              abrirAlCargar={sp.subir === '1'}
             />
           )}
-        </div>
-      </div>
-
-      <form className="card stack" role="search" style={{ gap: 12 }}>
-        <div className="row" style={{ alignItems: 'flex-end' }}>
-          <div className="field" style={{ flex: '2 1 260px' }}>
-            <label htmlFor="q">Texto</label>
-            <input id="q" name="q" defaultValue={sp.q} placeholder="Nombre, referencia, organismo…" />
-          </div>
-          {empresas.length > 1 && (
-            <div className="field" style={{ flex: '1 1 200px' }}>
-              <label htmlFor="empresa">Empresa</label>
-              <select id="empresa" name="empresa" defaultValue={sp.empresa ?? ''}>
-                <option value="">Todas</option>
-                {empresas.map((e) => <option key={e.id} value={e.id}>{e.razonSocial}</option>)}
-              </select>
-            </div>
+          {!empresaActiva && empresas.length > 1 && (
+            <details className="menu-elegir">
+              <summary className="btn btn--primary"><Icon name="upload" />{cmc ? 'Subir documento' : 'Enviar a CMC'}</summary>
+              <div className="menu-elegir__lista" role="menu">
+                <p className="small muted">¿De qué empresa?</p>
+                {empresas.map((e) => (
+                  <Link key={e.id} role="menuitem" href={enlace({ empresa: String(e.id), categoria: null, subir: '1' })}>{e.razonSocial}</Link>
+                ))}
+              </div>
+            </details>
           )}
-          {categorias && (
-            <div className="field" style={{ flex: '1 1 200px' }}>
-              <label htmlFor="categoria">Instalación</label>
-              <select id="categoria" name="categoria" defaultValue={sp.categoria ?? ''}>
-                <option value="">Todas</option>
-                {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-              </select>
-            </div>
-          )}
-          <div className="field">
-            <label htmlFor="desde">Caduca desde</label>
-            <input id="desde" name="desde" type="date" defaultValue={sp.desde} />
-          </div>
-          <div className="field">
-            <label htmlFor="hasta">hasta</label>
-            <input id="hasta" name="hasta" type="date" defaultValue={sp.hasta} />
-          </div>
         </div>
-        <fieldset className="row" style={{ border: 0, padding: 0, margin: 0 }}>
-          <legend className="sr-only">Estado</legend>
-          {FILTROS.filter((e) => cmc || e !== 'azul').map((e) => (
-            <label key={e} className="row small" style={{ gap: 6 }}>
-              <input type="checkbox" name="estado" value={e} defaultChecked={estados.includes(e)} />
-              <span className={`status status--${e}`}>{ESTADOS[e].label}</span>
-            </label>
-          ))}
-          <button className="btn btn--primary btn--sm" style={{ marginLeft: 'auto' }}><Icon name="search" />Buscar</button>
-        </fieldset>
-      </form>
+      </header>
 
-      <form id="seleccion" className="stack">
+      <nav className="chips" aria-label="Filtrar por estado">
+        <Link href={enlace({ estado: null })} className="chip" aria-current={estados.length === 0 ? 'true' : undefined} scroll={false}>
+          Todos <b>{total}</b>
+        </Link>
+        {CHIPS.filter((e) => cmc || e !== 'azul').map((e) => {
+          const n = cuenta[e] ?? 0
+          if (!n && !estados.includes(e)) return null
+          const activo = estados.length === 1 && estados[0] === e
+          return (
+            <Link key={e} href={enlace({ estado: activo ? null : e })} className={`chip chip--${e}`} aria-current={activo ? 'true' : undefined} scroll={false}>
+              <span className="chip__punto" aria-hidden="true" />
+              {ESTADOS[e].label} <b>{n}</b>
+            </Link>
+          )
+        })}
+      </nav>
+
+      <Suspense>
+        <FiltrosDocumentos
+          empresas={empresas.map((e) => ({ id: String(e.id), nombre: e.razonSocial }))}
+          categorias={categorias ? categorias.map((c) => ({ id: String(c.id), nombre: c.archivada ? `${c.nombre} (archivada)` : c.nombre })) : null}
+          ordenes={Object.entries(ORDENES).map(([id, o]) => ({ id, texto: o.texto }))}
+        />
+      </Suspense>
+
+      <form id="seleccion" className="stack" style={{ gap: 12 }}>
         <div className="row" style={{ justifyContent: 'space-between' }}>
-          <BotonZip formId="seleccion" />
+          <p className="small muted">
+            {r.totalDocs === 0 ? 'Ningún documento' : `${r.totalDocs} ${r.totalDocs === 1 ? 'documento' : 'documentos'}`}
+            {hayFiltros && <> · <Link href={enlace({ q: null, categoria: null, desde: null, hasta: null, estado: null })}>Quitar filtros</Link></>}
+          </p>
         </div>
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th style={{ width: 44 }}><MarcarTodos formId="seleccion" /></th>
-                <th>Documento</th>
-                {empresas.length > 1 && <th>Empresa</th>}
-                <th>Instalación</th>
-                <th>Caducidad</th>
-              </tr>
-            </thead>
-            <tbody>
-              {docs.length === 0 && <tr><td colSpan={empresas.length > 1 ? 5 : 4} className="muted">No hay documentos con esos criterios.</td></tr>}
-              {docs.map((d) => {
-                const emp = d.empresa as Empresa
-                const cat = d.categoria as Categoria
-                const dias = diasHasta(d.fechaCaducidad)
-                const fila = claseFila(d.estado as Estado, d.estadoManual === 'naranja' && d.estado !== 'naranja')
-                return (
-                  <tr key={d.id} className={fila.className}>
-                    <td><input type="checkbox" name="ids" value={d.id} aria-label={`Seleccionar ${d.titulo}`} /></td>
-                    <td>
-                      <span className="sr-only">{fila.label}</span>
-                      <Link href={`/portal/documentos/${d.id}`}>{d.titulo}</Link>
-                      <span className="muted" style={{ display: 'block' }}>{[d.referencia, d.organismo].filter(Boolean).join(' · ')}</span>
-                      {resolverGestion(emp?.gestion, cat?.gestion, d.gestion) === 'gestionado' && <span className="tag">Gestionado por CMC</span>}
-                    </td>
-                    {empresas.length > 1 && <td>{emp?.razonSocial}</td>}
-                    <td>{cat?.nombre}</td>
-                    <td style={{ whiteSpace: 'nowrap' }}>
-                      {d.fechaCaducidad ? fmt(d.fechaCaducidad) : 'Indefinido'}
-                      {dias !== null && <span className="muted" style={{ display: 'block' }}>{dias < 0 ? `Caducó hace ${-dias} días` : `Faltan ${dias} días`}</span>}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      </form>
+        <BotonZip formId="seleccion" />
 
-      {r.totalPages > 1 && (
-        <nav className="row" aria-label="Páginas">
-          {r.hasPrevPage && <Link className="btn btn--secondary btn--sm" href={enlace(pagina - 1)}>Anterior</Link>}
-          <span className="small muted">Página {pagina} de {r.totalPages}</span>
-          {r.hasNextPage && <Link className="btn btn--secondary btn--sm" href={enlace(pagina + 1)}>Siguiente</Link>}
-        </nav>
-      )}
-
-      {!cmc && (
-        <section className="stack">
-          <div className="stack" style={{ gap: 4 }}>
-            <h2>Sus envíos</h2>
-            <p className="small muted">Lo que ha enviado a CMC. Queda pendiente de revisión hasta que CMC lo publique; entonces pasa al listado de documentos.</p>
+        {docs.length === 0 ? (
+          <div className="vacio card">
+            <Icon name="search" size={28} />
+            {hayFiltros ? (
+              <>
+                <p><strong>Ningún documento coincide con la búsqueda.</strong></p>
+                <Link className="btn btn--secondary btn--sm" href={enlace({ q: null, categoria: null, desde: null, hasta: null, estado: null })}>Quitar filtros</Link>
+              </>
+            ) : (
+              <p><strong>Todavía no hay documentos.</strong> {cmc ? 'Elija una empresa y suba el primero.' : 'Envíe el primero a CMC con el botón de arriba.'}</p>
+            )}
           </div>
+        ) : (
           <div className="table-wrap">
-            <table className="table">
+            <table className="table docs">
               <thead>
                 <tr>
-                  <th>Envío</th>
-                  {empresas.length > 1 && <th>Empresa</th>}
-                  <th>Enviado</th>
+                  <th className="docs__marca"><MarcarTodos formId="seleccion" /></th>
+                  <th>Documento</th>
+                  <th>{conEmpresa ? 'Empresa · instalación' : 'Instalación'}</th>
                   <th>Estado</th>
+                  <th>Caducidad</th>
                 </tr>
               </thead>
               <tbody>
-                {(envios?.length ?? 0) === 0 && <tr><td colSpan={empresas.length > 1 ? 4 : 3} className="muted">Todavía no ha enviado ningún archivo.</td></tr>}
-                {envios?.map((e) => {
-                  const emp = typeof e.empresa === 'object' ? e.empresa : empresas.find((x) => String(x.id) === String(e.empresa))
-                  const destinoId = typeof e.documentoDestino === 'number' ? e.documentoDestino : e.documentoDestino?.id
-                  const estado = e.estado === 'publicado' ? 'verde' : e.estado === 'rechazado' ? 'rojo' : 'naranja'
-                  const etiqueta = e.estado === 'publicado' ? 'Publicado' : e.estado === 'rechazado' ? 'Rechazado' : 'Pendiente de revisión'
+                {docs.map((d) => {
+                  const emp = d.empresa as Empresa
+                  const cat = d.categoria as Categoria
+                  const estado = (d.estado ?? 'verde') as Estado
+                  const condicionada = d.estadoManual === 'naranja' && estado !== 'naranja'
+                  const p = plazo(estado === 'negro' || estado === 'azul' ? (d.fechaCaducidad ? diasHasta(d.fechaCaducidad) : null) : diasHasta(d.fechaCaducidad))
+                  const gestionado = resolverGestion(emp?.gestion, cat?.gestion, d.gestion) === 'gestionado'
                   return (
-                    <tr key={e.id}>
-                      <td>
-                        <strong>{e.titulo}</strong>
-                        <span className="muted" style={{ display: 'block' }}>{e.filename}</span>
-                        {e.estado === 'rechazado' && e.motivoRechazo && <span className="small" style={{ display: 'block' }}>{e.motivoRechazo}</span>}
+                    <tr key={d.id} className={`docs__fila estado--${estado}`}>
+                      <td className="docs__marca"><input type="checkbox" name="ids" value={d.id} aria-label={`Seleccionar ${d.titulo}`} /></td>
+                      <td className="docs__doc">
+                        <Link href={`/portal/documentos/${d.id}`} className="docs__titulo">{d.titulo}</Link>
+                        <span className="docs__meta">
+                          {[d.referencia, d.organismo].filter(Boolean).join(' · ')}
+                          {gestionado && <span className="mini" title="CMC se encarga de la renovación"><Icon name="shield" size={12} />Gestiona CMC</span>}
+                        </span>
                       </td>
-                      {empresas.length > 1 && <td>{emp?.razonSocial}</td>}
-                      <td style={{ whiteSpace: 'nowrap' }}>{fmtHora(e.createdAt)}</td>
-                      <td>
-                        <span className={`status status--${estado}`}>{etiqueta}</span>
-                        {e.estado === 'publicado' && destinoId && (
-                          <Link href={`/portal/documentos/${destinoId}`} className="small" style={{ display: 'block', marginTop: 4 }}>Ver documento</Link>
-                        )}
+                      <td className="docs__donde">
+                        {conEmpresa && <span className="docs__empresa">{emp?.razonSocial}</span>}
+                        <Link href={enlace({ empresa: String(emp?.id ?? ''), categoria: String(cat?.id ?? ''), pagina: null })} className="docs__instalacion">{cat?.nombre ?? '—'}</Link>
+                      </td>
+                      <td className="docs__estado">
+                        <span className={`status status--${estado}`}>{ESTADOS[estado].label}</span>
+                        {condicionada && <span className="status status--naranja">Condicionada</span>}
+                      </td>
+                      <td className="docs__cad">
+                        <span className={`plazo plazo--${p.tono}`}>{estado === 'negro' ? 'Pendiente de legalizar' : estado === 'azul' ? 'Archivado' : p.texto}</span>
+                        <span className="small muted">{d.fechaCaducidad ? fmt(d.fechaCaducidad) : 'Indefinido'}</span>
                       </td>
                     </tr>
                   )
@@ -205,6 +190,50 @@ export default async function DocumentosPage({ searchParams }: { searchParams: P
               </tbody>
             </table>
           </div>
+        )}
+      </form>
+
+      {r.totalPages > 1 && (
+        <nav className="row" aria-label="Páginas" style={{ justifyContent: 'center' }}>
+          {r.hasPrevPage && <Link className="btn btn--secondary btn--sm" href={enlace({ pagina: String(pagina - 1) })}>Anterior</Link>}
+          <span className="small muted">Página {pagina} de {r.totalPages}</span>
+          {r.hasNextPage && <Link className="btn btn--secondary btn--sm" href={enlace({ pagina: String(pagina + 1) })}>Siguiente</Link>}
+        </nav>
+      )}
+
+      {!cmc && (
+        <section className="stack" style={{ gap: 12 }}>
+          <div className="stack" style={{ gap: 4 }}>
+            <h2 style={{ fontSize: 22, lineHeight: '28px' }}>Sus envíos a CMC</h2>
+            <p className="small muted">Archivos que ha enviado. Quedan pendientes de revisión hasta que CMC los publica; entonces pasan a la lista de documentos.</p>
+          </div>
+          {(envios?.length ?? 0) === 0 ? (
+            <p className="small muted">Todavía no ha enviado ningún archivo.</p>
+          ) : (
+            <ul className="envios">
+              {envios!.map((e) => {
+                const emp = typeof e.empresa === 'object' ? e.empresa : empresas.find((x) => String(x.id) === String(e.empresa))
+                const destinoId = typeof e.documentoDestino === 'number' ? e.documentoDestino : e.documentoDestino?.id
+                const estado = e.estado === 'publicado' ? 'verde' : e.estado === 'rechazado' ? 'rojo' : 'amarillo'
+                const etiqueta = e.estado === 'publicado' ? 'Publicado' : e.estado === 'rechazado' ? 'Rechazado' : 'Pendiente de revisión'
+                return (
+                  <li key={e.id} className="envio">
+                    <Icon name="file" />
+                    <div className="envio__cuerpo">
+                      <strong>{e.titulo}</strong>
+                      <span className="small muted">
+                        {e.filename} · {fmtHora(e.createdAt)}
+                        {empresas.length > 1 && emp ? ` · ${(emp as Empresa).razonSocial}` : ''}
+                      </span>
+                      {e.estado === 'rechazado' && e.motivoRechazo && <span className="small">Motivo: {e.motivoRechazo}</span>}
+                    </div>
+                    <span className={`status status--${estado}`}>{etiqueta}</span>
+                    {e.estado === 'publicado' && destinoId && <Link href={`/portal/documentos/${destinoId}`} className="small">Ver documento</Link>}
+                  </li>
+                )
+              })}
+            </ul>
+          )}
         </section>
       )}
     </>
