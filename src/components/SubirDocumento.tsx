@@ -1,18 +1,21 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Icon } from './Icon'
 
 type Categoria = { id: string; nombre: string }
 
 /** Subida de CMC. Sin documento, el archivo crea el documento. Con documento, se añade al histórico. */
-export function SubirDocumento({ empresaId, categorias = [], documentos = [], documentoId, meses, variante = 'dialogo' }: { empresaId: string; categorias?: Categoria[]; documentos?: { id: string; titulo: string }[]; documentoId?: string; meses?: number; variante?: 'dialogo' | 'ficha' }) {
+export function SubirDocumento({ empresaId, categorias = [], documentos = [], documentoId, meses, variante = 'dialogo', clase = 'btn btn--primary', abrirAlCargar = false }: { empresaId: string; categorias?: Categoria[]; documentos?: { id: string; titulo: string }[]; documentoId?: string; meses?: number; variante?: 'dialogo' | 'ficha'; clase?: string; abrirAlCargar?: boolean }) {
   const dialogo = useRef<HTMLDialogElement>(null)
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
   const anadir = Boolean(documentoId)
+  useEffect(() => {
+    if (abrirAlCargar && !dialogo.current?.open) dialogo.current?.showModal()
+  }, [abrirAlCargar])
 
   async function enviar(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -87,15 +90,15 @@ export function SubirDocumento({ empresaId, categorias = [], documentos = [], do
 
   return (
     <>
-      <button className="btn btn--primary" type="button" onClick={() => { setError(null); dialogo.current?.showModal() }}>
-        <Icon name="upload" />Subir documento
+      <button className={clase} type="button" onClick={() => { setError(null); dialogo.current?.showModal() }}>
+        <Icon name="upload" />{anadir ? 'Añadir archivo' : 'Subir documento'}
       </button>
       <dialog ref={dialogo} className="dialogo" aria-labelledby="subir-titulo" onClick={(e) => { if (e.target === dialogo.current) dialogo.current?.close() }}>
         <form className="dialogo__caja stack" style={{ gap: 16 }} onSubmit={enviar}>
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div className="stack" style={{ gap: 4 }}>
-              <h2 id="subir-titulo" style={{ margin: 0 }}>Subir documento</h2>
-              <p className="muted" style={{ margin: 0 }}>El documento entra con el archivo. No se crea uno vacío.</p>
+              <h2 id="subir-titulo" style={{ margin: 0 }}>{anadir ? 'Añadir archivo' : 'Subir documento'}</h2>
+              <p className="muted" style={{ margin: 0 }}>{anadir ? 'Renovación, subsanación o anexo. El archivo anterior pasa al histórico; no se borra nada.' : 'El documento entra con el archivo. No se crea uno vacío.'}</p>
             </div>
             <button className="btn btn--secondary btn--sm" type="button" onClick={() => dialogo.current?.close()}>Cerrar</button>
           </div>
