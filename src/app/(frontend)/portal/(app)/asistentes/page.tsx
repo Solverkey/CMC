@@ -3,6 +3,7 @@ import { FormAccion } from '@/components/FormAccion'
 import { urlServidor } from '@/lib/configuracion'
 import { contexto, fmtHora } from '@/lib/payload'
 import { clavesDe } from '@/mcp/claves'
+import { herramientasPara } from '@/mcp/herramientas'
 
 export const metadata = { title: 'Asistentes de IA' }
 
@@ -18,6 +19,9 @@ export default async function AsistentesPage() {
     renovacionCaduca: c.renovacion_caduca,
   }))
   const url = `${urlServidor()}/api/mcp`
+  const disponibles = herramientasPara(user)
+  const consultas = disponibles.filter((h) => h.soloLectura)
+  const acciones = disponibles.filter((h) => !h.soloLectura)
 
   return (
     <>
@@ -25,7 +29,7 @@ export default async function AsistentesPage() {
         <p className="small muted">Conexión con asistentes de IA (Claude, ChatGPT, Cursor…)</p>
         <h1>Asistentes de IA</h1>
         <p className="muted">
-          Conecte su asistente de IA al portal para consultar documentos, vencimientos y avisos, enviar documentos a CMC o escribir mensajes conversando.
+          Conecte su asistente de IA al portal para consultar documentos, vencimientos, avisos y conversaciones, enviar documentos o escribir mensajes conversando.
           El asistente actúa siempre con sus permisos: solo ve sus empresas, y las acciones importantes le pedirán confirmación. Todo queda en el registro de actividad.
         </p>
       </div>
@@ -37,6 +41,21 @@ export default async function AsistentesPage() {
         <p className="small muted">
           Si su asistente no admite el inicio de sesión (OAuth), cree abajo una clave y configúrela como cabecera <code>Authorization: Bearer &lt;clave&gt;</code>.
         </p>
+      </section>
+
+      <section className="card stack">
+        <h2 style={{ fontSize: 22, lineHeight: '28px' }}>Qué puede hacer su asistente</h2>
+        <p className="small muted">Depende de su rol en el portal. Las acciones con efectos importantes le pedirán confirmación antes de hacerse.</p>
+        <div className="grid-auto" style={{ gap: 'var(--space-4)' }}>
+          <div className="stack" style={{ gap: 8 }}>
+            <strong>Consultar ({consultas.length})</strong>
+            <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>{consultas.map((h) => <li key={h.name}>{h.title}</li>)}</ul>
+          </div>
+          <div className="stack" style={{ gap: 8 }}>
+            <strong>Hacer ({acciones.length})</strong>
+            <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>{acciones.map((h) => <li key={h.name}>{h.title}</li>)}</ul>
+          </div>
+        </div>
       </section>
 
       <section className="card stack">

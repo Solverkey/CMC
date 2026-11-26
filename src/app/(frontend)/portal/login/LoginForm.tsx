@@ -4,7 +4,8 @@ import { useState } from 'react'
 import { CampoPassword } from '@/components/CampoPassword'
 
 /** Solo rutas internas, para no redirigir fuera del portal. */
-const destinoSeguro = (next?: string) => (next && next.startsWith('/') && !next.startsWith('//') ? next : '/portal')
+// Solo rutas propias; /admin ya no existe y se cambia por el portal.
+const destinoSeguro = (next?: string) => (next && next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/admin') ? next : '/portal')
 
 export function LoginForm({ next }: { next?: string }) {
   const router = useRouter()
@@ -35,11 +36,8 @@ export function LoginForm({ next }: { next?: string }) {
       return
     }
     const destino = destinoSeguro(next)
-    if (destino.startsWith('/admin')) window.location.assign(destino)
-    else {
-      router.push(destino)
-      router.refresh()
-    }
+    router.push(destino)
+    router.refresh()
   }
 
   return (

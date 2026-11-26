@@ -36,7 +36,7 @@ type DatosDoc = {
 
 async function prepararDatos(ctx: Ctx, data: DatosDoc, anterior?: Documento | null) {
   const cat = await categoriaPorId(data.categoria)
-  if (cat && String(idDe(cat.empresa)) !== String(data.empresa)) throw new AppError('La categoría elegida pertenece a otra empresa.')
+  if (cat && String(idDe(cat.empresa)) !== String(data.empresa)) throw new AppError('La instalación elegida pertenece a otra empresa.')
   const empresa = await empresaPorId(data.empresa)
   const caducidad = data.fechaCaducidad
   const avisoCambiado = anterior ? dia(data.fechaAviso) !== dia(anterior.fechaAviso) && data.fechaAviso != null : Boolean(data.fechaAviso)
@@ -167,7 +167,7 @@ export async function actualizarDocumento(ctx: Ctx, id: number | string, data: P
   if (Object.keys(diff).length) {
     await registrar(ctx, {
       accion: 'edicion',
-      descripcion: diff.categoria ? `Documento «${doc.titulo}» movido de categoría` : `Edición del documento «${doc.titulo}»`,
+      descripcion: diff.categoria ? `Documento «${doc.titulo}» movido de instalación` : `Edición del documento «${doc.titulo}»`,
       empresa: junto.empresa,
       coleccion: 'documentos',
       registroId: doc.id,
@@ -189,7 +189,7 @@ export async function crearArchivo(ctx: Ctx, data: { documento: number; relacion
   const doc = await documentoPorId(data.documento)
   if (!doc) throw new AppError('Documento no encontrado.', 404)
   const relacion = String(data.relacion ?? 'Original').trim()
-  let efectos = data.efectos?.length ? data.efectos : await efectosDe(ctx, relacion)
+  const efectos = data.efectos?.length ? data.efectos : await efectosDe(ctx, relacion)
   if (!efectos) throw new AppError(`«${relacion}» es un tipo de relación nuevo: indique su efecto.`)
   if (efectos.includes('actualiza_fechas') && !data.nuevaCaducidad) throw new AppError('Este tipo de relación actualiza fechas: indique la nueva caducidad.')
   const preparado = await prepararFichero(fichero, { sinComprimir: sinComprimir || Boolean(ctx.context.sinComprimir) })
@@ -317,9 +317,9 @@ export async function resolverEnvio(
       const d = await documentoPorId(destino)
       if (!d || String(idDe(d.empresa)) !== String(empresaId)) throw new AppError('El documento de destino es de otra empresa.')
     } else {
-      if (!data.categoriaDestino) throw new AppError('Elija el documento donde publicar o la categoría del documento nuevo.')
+      if (!data.categoriaDestino) throw new AppError('Elija el documento donde publicar o la instalación del documento nuevo.')
       const c = await categoriaPorId(data.categoriaDestino)
-      if (!c || String(idDe(c.empresa)) !== String(empresaId)) throw new AppError('La categoría es de otra empresa.')
+      if (!c || String(idDe(c.empresa)) !== String(empresaId)) throw new AppError('La instalación es de otra empresa.')
     }
     await ejecutar(
       `UPDATE envios SET estado='publicado', documento_destino_id=$2, categoria_destino_id=$3, titulo_final=$4, relacion_final=$5, fecha_emision=$6, fecha_caducidad=$7, fecha_aviso=$8, resuelto_por_id=$9, resuelto_en=$10, updated_at=$10 WHERE id=$1`,
@@ -414,6 +414,8 @@ export async function crearEmpresa(
   return empresa
 }
 
+const GESTION = (g?: string | null) => (g === 'gestionado' ? 'gestionado' : g === 'no_gestionado' ? 'no gestionado' : 'heredada')
+
 export async function actualizarEmpresa(ctx: Ctx, id: number | string, data: { antelacionMeses?: number | null; activa?: boolean; gestion?: Empresa['gestion'] | null }) {
   if (!esSuperAdmin(ctx.user)) throw new AppError('Solo CMC puede editar empresas.', 403)
   const antes = await empresaPorId(id)
@@ -426,17 +428,36 @@ export async function actualizarEmpresa(ctx: Ctx, id: number | string, data: { a
   if (antes.activa !== despues.activa) {
     await registrar(ctx, { accion: despues.activa ? 'alta' : 'baja', descripcion: `${despues.activa ? 'Reactivación' : 'Baja lógica'} de la empresa «${despues.razonSocial}»`, empresa: despues.id, coleccion: 'empresas', registroId: despues.id })
   }
+  const cambios = [
+    antes.antelacionMeses !== despues.antelacionMeses && `antelación de aviso ${antes.antelacionMeses ?? 'estándar'} → ${despues.antelacionMeses ?? 'estándar'} meses`,
+    antes.gestion !== despues.gestion && `modalidad ${GESTION(antes.gestion)} → ${GESTION(despues.gestion)}`,
+  ].filter(Boolean)
+  if (cambios.length) {
+    await registrar(ctx, { accion: 'edicion', descripcion: `Empresa «${despues.razonSocial}»: ${cambios.join('; ')}`, empresa: despues.id, coleccion: 'empresas', registroId: despues.id, datos: { antes: { antelacionMeses: antes.antelacionMeses, gestion: antes.gestion }, despues: { antelacionMeses: despues.antelacionMeses, gestion: despues.gestion } } })
+  }
   return despues
 }
 
 export async function actualizarCategoria(ctx: Ctx, id: number | string, data: { antelacionMeses?: number | null; gestion?: string | null; nombre?: string; archivada?: boolean }) {
-  if (!esSuperAdmin(ctx.user)) throw new AppError('Solo CMC puede editar categorías.', 403)
+  if (!esSuperAdmin(ctx.user)) throw new AppError('Solo CMC puede editar instalaciones.', 403)
+  const antes = await categoriaPorId(id)
+  if (!antes) throw new AppError('Instalación no encontrada.', 404)
   const momento = ahora()
   if (data.antelacionMeses !== undefined) await ejecutar('UPDATE categorias SET antelacion_meses = $2, updated_at = $3 WHERE id = $1', [Number(id), data.antelacionMeses, momento])
   if (data.gestion !== undefined) await ejecutar('UPDATE categorias SET gestion = $2, updated_at = $3 WHERE id = $1', [Number(id), data.gestion, momento])
   if (data.nombre !== undefined) await ejecutar('UPDATE categorias SET nombre = $2, updated_at = $3 WHERE id = $1', [Number(id), data.nombre, momento])
   if (data.archivada !== undefined) await ejecutar('UPDATE categorias SET archivada = $2, updated_at = $3 WHERE id = $1', [Number(id), bit(data.archivada), momento])
-  return categoriaPorId(id)
+  const despues = (await categoriaPorId(id))!
+  const cambios = [
+    antes.nombre !== despues.nombre && `nombre «${antes.nombre}» → «${despues.nombre}»`,
+    antes.antelacionMeses !== despues.antelacionMeses && `antelación de aviso ${antes.antelacionMeses ?? 'de la empresa'} → ${despues.antelacionMeses ?? 'de la empresa'} meses`,
+    antes.gestion !== despues.gestion && `modalidad ${GESTION(antes.gestion)} → ${GESTION(despues.gestion)}`,
+    Boolean(antes.archivada) !== Boolean(despues.archivada) && (despues.archivada ? 'archivada' : 'desarchivada'),
+  ].filter(Boolean)
+  if (cambios.length) {
+    await registrar(ctx, { accion: 'edicion', descripcion: `Instalación «${despues.nombre}»: ${cambios.join('; ')}`, empresa: idDe(despues.empresa), coleccion: 'categorias', registroId: despues.id })
+  }
+  return despues
 }
 
 export async function crearMedia(ctx: Ctx, alt: string, fichero: Fichero) {
@@ -458,15 +479,17 @@ export async function recalcularColor(ctx: Ctx, id: number) {
   await ejecutar('UPDATE documentos SET estado = $2, updated_at = $3 WHERE id = $1', [id, nuevo, ahora()])
   const actualizado = (await documentoPorId(id))!
   const empresa = typeof actualizado.empresa === 'object' ? actualizado.empresa : null
-  if (empresa && !ctx.context.sinAvisos) {
+  if (empresa) {
     const cat = typeof actualizado.categoria === 'object' ? actualizado.categoria : null
     const manual = false
-    const colorCambia = true
+    // Caducidad próxima (amarillo) y caducado (rojo) ya los avisa la secuencia de la tarea nocturna (hitoDeHoy) el mismo día:
+    // aquí solo se escribe por los demás cambios. Las empresas dadas de baja no reciben correos.
+    const avisar = !ctx.context.sinAvisos && empresa.activa !== false && nuevo !== 'amarillo' && nuevo !== 'rojo'
     const gestionado = resolverGestion(empresa.gestion, cat?.gestion, actualizado.gestion) === 'gestionado'
     const antes = ESTADOS[doc.estado as Estado]?.label ?? '—'
     const despues = ESTADOS[nuevo].label
     const cierre = gestionado ? 'No necesita hacer nada: CMC lo gestiona y le avisaremos cuando el nuevo documento esté disponible.' : 'Revíselo y, cuando disponga del nuevo, súbalo al portal o envíenoslo.'
-    await programarCorreo(ctx, {
+    if (avisar) await programarCorreo(ctx, {
       plantilla: gestionado ? 'proxima_gestionado' : 'proxima_no_gestionado',
       asunto: gestionado ? `«{{documento}}» pasa a ${despues} — CMC se encarga` : `«{{documento}}» pasa a ${despues} — requiere su revisión`,
       cuerpo: `El documento «{{documento}}» de {{empresa}} ha pasado de ${antes} a ${despues}. ${cierre}`,

@@ -1,22 +1,29 @@
-import { headers } from 'next/headers'
+import { cookies, headers } from 'next/headers'
+import path from 'path'
+import { esSuperAdmin } from '@/access'
+import { visible } from '@/datos/mapas'
 import { registrar } from '@/lib/actividad'
+import { eventosCorreo, marcarCorreo } from '@/lib/correo'
 import { AppError, errorJson } from '@/lib/appError'
 import { sugerir } from '@/lib/catalogo'
 import { firmar, igualSeguro } from '@/lib/cifrado'
 import type { Ctx } from '@/lib/ctx'
-import { ahora, ejecutar } from '@/lib/db'
+import { ahora, ejecutar, uno } from '@/lib/db'
 import { leerFichero, tipoPorNombre } from '@/lib/ficheros'
 import { verificarPassword } from '@/lib/clave'
-import { leerSesion, escribirSesion, borrarSesion } from '@/lib/sesion'
-import { anotarFallo, guardarPassword, usuarioPorEmail } from '@/datos/usuarios'
+import { COOKIE, leerSesion, escribirSesion, borrarSesion } from '@/lib/sesion'
+import { anotarFallo, usuarioPorEmail } from '@/datos/usuarios'
 import { crearEnvio } from '@/datos/operaciones'
 import { autorizar, cuerpo, metadatosRecurso, metadatosServidor, registrarCliente, revocar, token } from '@/mcp/oauth'
 import { adjuntoAEnvio, crearHilo, escribirMensaje, exportarHistorial, subirAdjunto } from '@/servicios/comunicacion'
 import { descargable, inventario, resolverEnlace, zipDocumentos } from '@/servicios/documentos'
 import { activar2FA, comprobarCodigoLogin, desactivar2FA, iniciar2FA } from '@/servicios/seguridad'
-import { aceptarInvitacion, pedirRestablecer, restablecerPassword, validarPassword } from '@/servicios/usuarios'
+import { aceptarInvitacion, cambiarPassword, pedirRestablecer, restablecerPassword } from '@/servicios/usuarios'
 
 export const dynamic = 'force-dynamic'
+
+const PUBLICOS = new Set(['media', 'videos'])
+const PRIVADOS = new Set(['archivos', 'envios', 'adjuntos', 'originales'])
 
 const json = (datos: unknown, status = 200) => Response.json(datos, { status })
 
@@ -54,7 +61,17 @@ async function login(req: Request) {
     throw new AppError('Correo o contraseña incorrectos.', 401)
   }
   if (u.activo === false) throw new AppError('Esta cuenta está dada de baja.', 403)
-  const paso = comprobarCodigoLogin(u, b.codigo)
+  let paso: number | null
+  try {
+    paso = comprobarCodigoLogin(u, b.codigo)
+  } catch (e) {
+    // Un código erróneo cuenta como intento fallido: si no, el doble factor se podría probar sin límite.
+    if (typeof b.codigo === 'string' && b.codigo.trim()) {
+      await anotarFallo(u.id)
+      await registrar(ctxLogin, { accion: 'login_fallido', descripcion: `Código de doble factor incorrecto de ${u.email}`, usuario: u })
+    }
+    throw e
+  }
   if (u.rol !== 'superadmin' && !(u.empresas ?? []).some((m) => typeof m.empresa === 'object' && m.empresa.activa !== false)) {
     throw new AppError('No tiene ninguna empresa activa.', 403)
   }
@@ -96,7 +113,10 @@ async function atender(req: Request, slug: string[]) {
     await aceptarInvitacion(ctx, String(b.token ?? ''), String(b.password ?? ''))
     return json({ ok: true })
   }
-  if (req.method === 'POST' && ruta === 'users/2fa/iniciar') return json(await iniciar2FA(ctx))
+  if (req.method === 'POST' && ruta === 'users/2fa/iniciar') {
+    const b = (await req.json().catch(() => ({}))) as { codigo?: string }
+    return json(await iniciar2FA(ctx, b.codigo))
+  }
   if (req.method === 'POST' && ruta === 'users/2fa/activar') {
     const b = (await req.json()) as { codigo?: string }
     await activar2FA(ctx, String(b.codigo ?? ''))
@@ -110,9 +130,9 @@ async function atender(req: Request, slug: string[]) {
   if (req.method === 'PATCH' && slug[0] === 'users' && slug.length === 2) {
     const yo = exigir(ctx)
     if (String(yo.id) !== slug[1]) throw new AppError('No puede cambiar la contraseña de otra cuenta.', 403)
-    const b = (await req.json()) as { password?: string }
-    validarPassword(String(b.password ?? ''))
-    await guardarPassword(yo.id, String(b.password))
+    const b = (await req.json()) as { password?: string; actual?: string }
+    const sesion = (await cookies()).get(COOKIE)?.value ?? null
+    await cambiarPassword(ctx, sesion, String(b.actual ?? ''), String(b.password ?? ''))
     return json({ ok: true })
   }
 
@@ -122,8 +142,16 @@ async function atender(req: Request, slug: string[]) {
   if (req.method === 'POST' && ruta === 'oauth/revocar') return revocar(req)
 
   if (req.method === 'GET' && slug[0] === 'ficheros' && slug.length === 3) {
-    const nombre = decodeURIComponent(slug[2])
-    const data = await leerFichero(slug[1], { filename: nombre })
+    const coleccion = slug[1]
+    const nombre = path.basename(decodeURIComponent(slug[2]))
+    if (!PUBLICOS.has(coleccion) && !PRIVADOS.has(coleccion)) throw new AppError('No encontrado.', 404)
+    // Logotipos e imágenes de la web son públicos; los documentos de las empresas solo los ve quien tiene acceso a su empresa.
+    if (PRIVADOS.has(coleccion)) {
+      const user = exigir(ctx)
+      const reg = await uno(`SELECT id FROM ${coleccion} WHERE filename = $1 AND ${visible(user, 'empresa_id')} LIMIT 1`, [nombre])
+      if (!reg) throw new AppError('No tiene acceso a este archivo.', 403)
+    }
+    const data = await leerFichero(coleccion, { filename: nombre })
     const headers: Record<string, string> = {
       'Content-Type': tipoPorNombre(nombre),
       'Cache-Control': 'private, max-age=60',
@@ -138,9 +166,19 @@ async function atender(req: Request, slug: string[]) {
   if (req.method === 'GET' && ruta.startsWith('correos/') && ruta.endsWith('/abierto')) {
     const id = slug[1]
     const f = new URL(req.url).searchParams.get('f') ?? ''
-    if (igualSeguro(f, firmar(id, 'pixel'))) await ejecutar(`UPDATE correos SET estado = 'abierto', updated_at = $2 WHERE id = $1 AND estado = 'enviado'`, [Number(id), ahora()]).catch(() => null)
+    if (igualSeguro(f, firmar(id, 'pixel'))) {
+      const correo = await uno<{ id: number; asunto: string; para: string; empresa_id: number | null; estado: string | null; abierto_en: string | null }>('SELECT id, asunto, para, empresa_id, estado, abierto_en FROM correos WHERE id = $1', [Number(id)]).catch(() => undefined)
+      if (correo && !correo.abierto_en) await marcarCorreo(correo, 'abierto').catch(() => null)
+    }
     const gif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64')
     return new Response(new Uint8Array(gif), { headers: { 'Content-Type': 'image/gif', 'Cache-Control': 'no-store' } })
+  }
+
+  if (req.method === 'POST' && ruta === 'correos/eventos') {
+    const secreto = process.env.EMAIL_WEBHOOK_SECRET
+    const recibido = req.headers.get('x-webhook-secret') ?? new URL(req.url).searchParams.get('secreto') ?? ''
+    if (!secreto || !igualSeguro(recibido, secreto)) return json({ errors: [{ message: 'No autorizado' }] }, 401)
+    return json({ procesados: await eventosCorreo(await req.json().catch(() => null)) })
   }
 
   if (req.method === 'GET' && ruta === 'catalogo/sugerencias') {
@@ -175,6 +213,7 @@ async function atender(req: Request, slug: string[]) {
   }
 
   if (req.method === 'GET' && ruta === 'almacenamiento') {
+    if (!esSuperAdmin(exigir(ctx))) throw new AppError('Solo CMC.', 403)
     const { almacenamiento } = await import('@/lib/estadisticas')
     return json(await almacenamiento())
   }

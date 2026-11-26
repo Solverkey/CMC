@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { administraEmpresa } from '@/access'
 import { contexto, idDe } from '@/lib/payload'
+import { registrar } from '@/lib/actividad'
 import { restarMeses } from '@/lib/estado'
 import { PLANTILLAS, type ClavePlantilla } from '@/lib/plantillas'
 import { guardarConfiguracion as persistirConfig } from '@/lib/configuracion'
@@ -12,7 +13,7 @@ import { cambiarRol, enviarInvitacion, invitarUsuario, quitarAcceso } from '@/se
 import { usuarioPorId } from '@/datos/usuarios'
 import { empresaPorId } from '@/datos/consultas'
 import { actualizarCategoria, actualizarDocumento, actualizarEmpresa, crearEmpresa, crearMedia, resolverEnvio as publicarEnvio } from '@/datos/operaciones'
-import { crearCatalogo, desactivarCatalogo } from '@/lib/catalogo'
+import { crearCatalogo, desactivarCatalogo, type Efecto } from '@/lib/catalogo'
 import { gestionarHilo as actualizarHilo } from '@/servicios/comunicacion'
 import type { Fichero } from '@/lib/subidas'
 
@@ -146,7 +147,8 @@ export async function crearSelector(_: Resultado, f: FormData): Promise<Resultad
     const { req } = await comoCmc()
     const tipo = campo(f, 'tipo')
     if (!['categoria', 'documento', 'relacion'].includes(tipo)) throw new Error('Tipo no válido.')
-    await crearCatalogo(req, tipo as 'categoria' | 'documento' | 'relacion', campo(f, 'nombre'))
+    const efectos = f.getAll('efectos').map(String) as Efecto[]
+    await crearCatalogo(req, tipo as 'categoria' | 'documento' | 'relacion', campo(f, 'nombre'), efectos)
     return 'Opción añadida.'
   })
 }
@@ -243,9 +245,9 @@ export async function guardarConfiguracion(_: Resultado, f: FormData): Promise<R
     const meses = f.getAll('catMeses').map((v) => String(v).trim())
     const gestiones = f.getAll('catGestion').map((v) => String(v))
     const descripciones = f.getAll('catDescripcion').map((v) => String(v).trim())
-    if (!nombres.length) throw new Error('Añada al menos una categoría a la plantilla de alta.')
+    if (!nombres.length) throw new Error('Añada al menos una instalación a la plantilla de alta.')
     const plantillaCategorias = nombres.map((nombre, i) => {
-      if (!nombre) throw new Error('Cada categoría de la plantilla necesita un nombre.')
+      if (!nombre) throw new Error('Cada instalación de la plantilla necesita un nombre.')
       const g = gestiones[i] ?? ''
       if (g && g !== 'gestionado' && g !== 'no_gestionado') throw new Error(`Modalidad no válida en «${nombre}».`)
       let antelacionMeses: number | null = null
@@ -286,6 +288,7 @@ export async function guardarConfiguracion(_: Resultado, f: FormData): Promise<R
       conservarOriginal: f.get('conservarOriginal') === 'on',
       plantillaCategorias,
     })
+    await registrar(req, { accion: 'edicion', descripcion: 'Configuración de la plataforma actualizada (avisos, correo, imágenes o plantilla de alta)', coleccion: 'configuracion' })
     revalidatePath('/portal')
     revalidatePath('/portal/almacenamiento')
     return 'Configuración guardada.'

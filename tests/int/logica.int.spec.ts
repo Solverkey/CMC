@@ -46,9 +46,10 @@ describe('secuencia de avisos (apartado 6)', () => {
     expect(hitoDeHoy(doc, cfg, hoy)?.tipo).toBe('proxima')
     expect(hitoDeHoy(doc, cfg, new Date(enDias(-1)))).toBeNull()
     expect(hitoDeHoy(doc, cfg, new Date(enDias(46)))?.tipo).toBe('recordatorio')
-    expect(hitoDeHoy(doc, cfg, new Date(enDias(60)))?.tipo).toBe('caducado')
-    expect(hitoDeHoy(doc, cfg, new Date(enDias(67)))).toMatchObject({ tipo: 'recordatorio_caducado', n: 1 })
-    expect(hitoDeHoy(doc, cfg, new Date(enDias(60 + 7 * 4)))).toBeNull()
+    expect(hitoDeHoy(doc, cfg, new Date(enDias(60)))?.tipo).not.toBe('caducado')
+    expect(hitoDeHoy(doc, cfg, new Date(enDias(61)))?.tipo).toBe('caducado')
+    expect(hitoDeHoy(doc, cfg, new Date(enDias(68)))).toMatchObject({ tipo: 'recordatorio_caducado', n: 1 })
+    expect(hitoDeHoy(doc, cfg, new Date(enDias(61 + 7 * 4)))).toBeNull()
   })
   it('al renovar cambia la clave y la secuencia empieza de nuevo', () => {
     const a = hitoDeHoy({ fechaCaducidad: enDias(-1), fechaAviso: enDias(-60) }, cfg, hoy)

@@ -13,6 +13,15 @@ const TIPOS: Record<string, string> = {
 }
 const ESTADO_CORREO: Record<string, string> = { pendiente: 'naranja', enviado: 'verde', entregado: 'verde', abierto: 'verde', rebotado: 'rojo', error: 'rojo' }
 
+const ETIQUETA_CORREO: Record<string, string> = {
+  pendiente: 'Pendiente de envío',
+  enviado: 'Enviado',
+  entregado: 'Entregado',
+  abierto: 'Abierto',
+  rebotado: 'Rebotado',
+  error: 'Error al enviar',
+}
+
 export default async function AvisosPage({ searchParams }: { searchParams: Promise<{ empresa?: string }> }) {
   const sp = await searchParams
   const { user, req, cmc } = await contexto('/portal/avisos')
@@ -61,7 +70,7 @@ export default async function AvisosPage({ searchParams }: { searchParams: Promi
                   <td>{fmtHora(c.createdAt)}</td>
                   <td>{c.asunto}{cmc && c.destinatario === 'cmc' && <span className="tag" style={{ marginLeft: 6 }}>Interno</span>}</td>
                   <td>{c.para}</td>
-                  <td><span className={`status status--${ESTADO_CORREO[c.estado ?? 'pendiente'] ?? 'naranja'}`}>{c.estado}</span></td>
+                  <td><span className={`status status--${ESTADO_CORREO[c.estado ?? 'pendiente'] ?? 'naranja'}`}>{ETIQUETA_CORREO[c.estado ?? 'pendiente'] ?? c.estado}</span></td>
                 </tr>
               ))}
             </tbody>

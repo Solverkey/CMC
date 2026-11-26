@@ -47,7 +47,7 @@ export function EditarDocumento({ id, empresaId, categorias, valores }: { id: st
             <input type="hidden" name="empresa" value={empresaId} />
             <div className="field"><label htmlFor="ed-titulo">Título</label><input className="input" id="ed-titulo" name="titulo" required defaultValue={valores.titulo} /></div>
             <div className="field">
-              <label htmlFor="ed-categoria">Categoría</label>
+              <label htmlFor="ed-categoria">Instalación</label>
               <select className="input" id="ed-categoria" name="categoria" required defaultValue={valores.categoria}>
                 <option value="">Elegir</option>
                 {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}

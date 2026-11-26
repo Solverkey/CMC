@@ -1,10 +1,10 @@
 import Link from 'next/link'
 import { CerrarCalendario } from '@/components/CerrarCalendario'
+import { MenuPortal } from '@/components/MenuPortal'
 import { NavPortal, type Enlace } from '@/components/NavPortal'
 import { PerfilPortal } from '@/components/PerfilPortal'
 import { dosFactorObligatorio, empresasDe } from '@/access'
-import { contar } from '@/datos/consultas'
-import { visible } from '@/datos/mapas'
+import { contar, contarNoLeidas } from '@/datos/consultas'
 import type { Empresa } from '@/datos/tipos'
 import { uno } from '@/lib/db'
 import { urlDe } from '@/lib/ficheros'
@@ -16,12 +16,10 @@ export default async function PortalLayout({ children }: { children: React.React
   const rolTexto = user.rol === 'superadmin' ? 'CMC · Super administrador' : esAdmin ? 'Administrador de empresa' : 'Usuario de empresa'
   const obligar2FA = user.rol === 'superadmin' && dosFactorObligatorio() && !user.totpActivo
 
+  // El contador de Comunicación cuenta las conversaciones con mensajes sin leer, como un correo.
   const [pendientes, sinLeer] = obligar2FA
     ? [0, 0]
-    : await Promise.all([
-        cmc ? contar('envios', "estado = 'pendiente'") : Promise.resolve(0),
-        contar('hilos', `estado = 'abierto' AND ${visible(user)}`),
-      ])
+    : await Promise.all([cmc ? contar('envios', "estado = 'pendiente'") : Promise.resolve(0), contarNoLeidas(user)])
 
   const primera = !cmc && user.empresas?.[0] ? (user.empresas[0].empresa as Empresa) : null
   const logoId = primera && typeof primera.logo === 'number' ? primera.logo : null
@@ -32,9 +30,9 @@ export default async function PortalLayout({ children }: { children: React.React
     { href: '/portal', texto: cmc ? 'Panel de empresas' : 'Panel', icono: 'grid' },
     { href: '/portal/documentos', texto: 'Documentos', icono: 'search' },
     ...(cmc ? ([{ href: '/portal/enviar', texto: 'Bandeja de envíos', icono: 'upload', aviso: pendientes || undefined }] as Enlace[]) : []),
-    { href: '/portal/mensajes', texto: 'Comunicación con CMC', icono: 'chat', aviso: sinLeer || undefined },
+    { href: '/portal/mensajes', texto: 'Comunicación', icono: 'chat', aviso: sinLeer || undefined },
     { href: '/portal/avisos', texto: 'Avisos', icono: 'bell' },
-    { href: '/portal/facturacion', texto: 'Facturación', icono: 'receipt' },
+    ...(esAdmin ? ([{ href: '/portal/facturacion', texto: 'Facturación', icono: 'receipt' }] as Enlace[]) : []),
     ...(cmc ? ([{ href: '/portal/selectores', texto: 'Selectores', icono: 'select' }, { href: '/portal/configuracion', texto: 'Configuración', icono: 'settings' }] as Enlace[]) : []),
     ...(esAdmin ? ([{ href: '/portal/usuarios', texto: 'Usuarios', icono: 'users' }, { href: '/portal/actividad', texto: 'Registro de actividad', icono: 'clock' }] as Enlace[]) : []),
     ...(cmc ? ([{ href: '/portal/almacenamiento', texto: 'Almacenamiento', icono: 'database' }] as Enlace[]) : []),
@@ -54,8 +52,10 @@ export default async function PortalLayout({ children }: { children: React.React
           {logoUrl ? <img src={logoUrl} alt={primera?.razonSocial ?? ''} style={{ maxHeight: 40, maxWidth: 160 }} /> : <img src="/marca/cmc.png" alt="" width={408} height={112} />}
           {logoUrl && <span>Portal documental</span>}
         </Link>
-        <NavPortal enlaces={enlaces} obligar2FA={obligar2FA} />
-        <PerfilPortal nombre={user.nombre} rol={rolTexto} enlaces={perfil} />
+        <MenuPortal>
+          <NavPortal enlaces={enlaces} obligar2FA={obligar2FA} />
+          <PerfilPortal nombre={user.nombre} rol={rolTexto} enlaces={perfil} />
+        </MenuPortal>
       </aside>
       <main className="portal__main">{children}</main>
     </div>

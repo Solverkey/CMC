@@ -84,6 +84,12 @@ export async function cerrarSesion(token: string) {
   await ejecutar('DELETE FROM users_sessions WHERE id = $1', [token])
 }
 
+/** Cierra todas las sesiones del usuario menos, si se indica, la actual (al cambiar o restablecer la contraseña). */
+export async function cerrarOtrasSesiones(userId: number, excepto?: string | null) {
+  if (excepto) await ejecutar('DELETE FROM users_sessions WHERE _parent_id = $1 AND id <> $2', [userId, excepto])
+  else await ejecutar('DELETE FROM users_sessions WHERE _parent_id = $1', [userId])
+}
+
 export async function anotarFallo(userId: number) {
   const u = await uno<{ login_attempts: number }>('SELECT login_attempts FROM users WHERE id = $1', [userId])
   const intentos = Number(u?.login_attempts ?? 0) + 1

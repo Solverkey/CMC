@@ -1,100 +1,109 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { gestionarHilo } from '../../../acciones'
 import { AdjuntoARevision } from '@/components/AdjuntoARevision'
-import { FormAccion } from '@/components/FormAccion'
+import { Actualizar } from '@/components/comunicacion/Actualizar'
+import { Bandeja, consultaFiltros, type FiltrosComunicacion } from '@/components/comunicacion/Bandeja'
+import { GestionConversacion } from '@/components/comunicacion/GestionConversacion'
+import { ScrollAlFinal } from '@/components/comunicacion/ScrollAlFinal'
 import { Icon } from '@/components/Icon'
 import { MensajeForm } from '@/components/MensajeForm'
 import { tamano } from '@/lib/subidas'
-import { hiloPorId, mensajesDeHilo, usuariosCms } from '@/datos/consultas'
+import { hiloPorId, marcarLeido, mensajesDeHilo, usuariosCms } from '@/datos/consultas'
 import type { Adjunto, Empresa, User } from '@/datos/tipos'
-import { contexto, fmtHora, idDe } from '@/lib/payload'
+import { contexto, idDe } from '@/lib/payload'
 
-export default async function ConversacionPage({ params }: { params: Promise<{ id: string }> }) {
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  const { user } = await contexto(`/portal/mensajes/${id}`)
+  const hilo = await hiloPorId(id, user)
+  return { title: hilo ? `${hilo.asunto} · Comunicación` : 'Comunicación' }
+}
+
+const hora = (iso: string) => new Date(iso).toLocaleTimeString('es-ES', { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit' })
+const dia = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+
+export default async function ConversacionPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<FiltrosComunicacion> }) {
+  const [{ id }, sp] = await Promise.all([params, searchParams])
   const { user, cmc } = await contexto(`/portal/mensajes/${id}`)
   const hilo = await hiloPorId(id, user)
   if (!hilo) notFound()
+  // Abrirla la marca como leída (antes de pintar la bandeja, para que la lista ya salga al día).
+  await marcarLeido(hilo.id, user.id)
 
   const empresa = hilo.empresa as Empresa
   const doc = typeof hilo.documento === 'object' && hilo.documento ? hilo.documento : null
-  const [mensajes, tecnicos] = await Promise.all([
-    mensajesDeHilo(hilo.id),
-    cmc ? usuariosCms() : null,
-  ])
+  const categoria = !doc && typeof hilo.categoria === 'object' && hilo.categoria ? hilo.categoria : null
+  const [mensajes, tecnicos] = await Promise.all([mensajesDeHilo(hilo.id), cmc ? usuariosCms() : null])
+  const resuelta = hilo.estado === 'resuelto'
+  const asignado = (hilo.asignado as User | null)?.nombre
 
+  // Separador de día delante del primer mensaje de cada día.
+  const dias = mensajes.map((m) => dia(m.createdAt))
   return (
-    <>
-      <Link href="/portal/mensajes" className="small">← Comunicación con CMC</Link>
-      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div className="stack" style={{ gap: 4 }}>
+    <Bandeja user={user} cmc={cmc} sp={sp} activo={String(hilo.id)}>
+      <Actualizar />
+      <header className="conv__cabeza">
+        <div className="stack" style={{ gap: 4, minWidth: 0, flex: '1 1 320px' }}>
+          <Link className="conv__volver small" href={`/portal/mensajes${consultaFiltros(sp)}`}>← Conversaciones</Link>
+          <h2>{hilo.asunto}</h2>
           <p className="small muted">
             {empresa.razonSocial}
-            {doc && <> · <Link href={`/portal/documentos/${doc.id}`}>{doc.titulo}</Link></>}
+            {doc && <> · Sobre <Link href={`/portal/documentos/${doc.id}`}>{doc.titulo}</Link></>}
+            {categoria && <> · Instalación {categoria.nombre}</>}
           </p>
-          <h1>{hilo.asunto}</h1>
-          <div className="row small">
-            <span className={`status status--${hilo.estado === 'resuelto' ? 'verde' : 'naranja'}`}>{hilo.estado === 'resuelto' ? 'Resuelto' : 'Abierto'}</span>
-            <span className="muted">Asignado a: {(hilo.asignado as User)?.nombre ?? 'sin asignar'}</span>
+          <div className="row small" style={{ gap: 8 }}>
+            <span className={`status status--${resuelta ? 'verde' : 'naranja'}`}>{resuelta ? 'Resuelta' : 'Abierta'}</span>
+            {!cmc && <span className="muted">{asignado ? `La atiende ${asignado} (CMC)` : 'Pendiente de asignar en CMC'}</span>}
           </div>
         </div>
-        <a className="btn btn--secondary btn--sm" href={`/api/comunicaciones/${empresa.id}${doc ? `?documento=${doc.id}` : ''}`}><Icon name="download" />Exportar (PDF)</a>
-      </div>
+        <a className="btn btn--ghost btn--sm" href={`/api/comunicaciones/${empresa.id}${doc ? `?documento=${doc.id}` : ''}`} title={doc ? 'Historial de comunicaciones de este documento' : `Historial de comunicaciones de ${empresa.razonSocial}`}>
+          <Icon name="download" />Exportar PDF
+        </a>
+      </header>
 
-      {cmc && tecnicos && (
-        <FormAccion accion={gestionarHilo} className="card row" style={{ alignItems: 'flex-end' }}>
-          <input type="hidden" name="hilo" value={hilo.id} />
-          <div className="field">
-            <label htmlFor="asignado">Persona de CMC asignada</label>
-            <select id="asignado" name="asignado" defaultValue={idDe(hilo.asignado)}>
-              <option value="">Sin asignar</option>
-              {tecnicos.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="estado">Estado</label>
-            <select id="estado" name="estado" defaultValue={hilo.estado ?? 'abierto'}>
-              <option value="abierto">Abierto</option>
-              <option value="resuelto">Resuelto</option>
-            </select>
-          </div>
-          <button className="btn btn--secondary">Guardar</button>
-        </FormAccion>
-      )}
+      {cmc && tecnicos && <GestionConversacion key={`${hilo.estado}-${idDe(hilo.asignado)}`} hilo={String(hilo.id)} estado={resuelta ? 'resuelto' : 'abierto'} asignado={idDe(hilo.asignado)} tecnicos={tecnicos} />}
 
-      <ol className="hilo">
-        {mensajes.length === 0 && <li className="muted">Esta conversación se guardó sin texto. Escríbalo en la respuesta de abajo.</li>}
-        {mensajes.map((m) => {
+      <div className="conv__mensajes" aria-live="polite">
+        {mensajes.length === 0 && <p className="muted small" style={{ textAlign: 'center' }}>Esta conversación aún no tiene mensajes.</p>}
+        {mensajes.map((m, i) => {
           const autor = m.autor as User | null
-          const deCMC = autor?.rol === 'superadmin'
+          const deCmc = autor?.rol === 'superadmin'
+          // Mis mensajes (o los de mi lado: CMC o mi empresa) van a la derecha, como en un chat.
+          const mia = cmc ? deCmc : !deCmc
+          const hoy = dias[i]
+          const separador = i === 0 || hoy !== dias[i - 1]
           return (
-            <li key={m.id} className={`mensaje${deCMC ? ' mensaje--cmc' : ''}`}>
-              <div className="row small" style={{ justifyContent: 'space-between' }}>
-                <strong>{autor?.nombre ?? 'Usuario'}{deCMC ? ' · CMC' : ''}</strong>
-                <time className="muted" dateTime={m.createdAt}>{fmtHora(m.createdAt)}</time>
-              </div>
-              <p style={{ whiteSpace: 'pre-wrap' }}>{m.texto}</p>
-              {(m.adjuntos ?? []).map((a) => {
-                if (typeof a !== 'object') return null
-                const adj = a as Adjunto
-                return (
-                  <div key={adj.id} className="file">
-                    <Icon name="paperclip" />
-                    <a className="file__name" href={adj.url ?? '#'} target="_blank" rel="noreferrer">{adj.filename}</a>
-                    <span className="muted">{tamano(adj.filesize)}</span>
-                    <AdjuntoARevision adjunto={String(adj.id)} documento={doc ? String(doc.id) : undefined} />
-                  </div>
-                )
-              })}
-            </li>
+            <div key={m.id} style={{ display: 'contents' }}>
+              {separador && <p className="conv__dia">{hoy}</p>}
+              <article className={`burbuja${mia ? ' burbuja--mia' : ''}`} aria-label={`Mensaje de ${autor?.nombre ?? 'Usuario'}`}>
+                <header className="burbuja__autor">
+                  <strong>{String(autor?.id) === String(user.id) ? 'Usted' : (autor?.nombre ?? 'Usuario')}{deCmc ? ' · CMC' : ''}</strong>
+                  <time dateTime={m.createdAt}>{hora(m.createdAt)}</time>
+                </header>
+                <p className="burbuja__texto">{m.texto}</p>
+                {(m.adjuntos ?? []).map((a) => {
+                  if (typeof a !== 'object') return null
+                  const adj = a as Adjunto
+                  return (
+                    <div key={adj.id} className="file">
+                      <Icon name="paperclip" />
+                      <a className="file__name" href={adj.url ?? '#'} target="_blank" rel="noreferrer">{adj.filename}</a>
+                      <span className="muted">{tamano(adj.filesize)}</span>
+                      <AdjuntoARevision adjunto={String(adj.id)} documento={doc ? String(doc.id) : undefined} />
+                    </div>
+                  )
+                })}
+              </article>
+            </div>
           )
         })}
-      </ol>
+        <ScrollAlFinal marca={mensajes.length} />
+      </div>
 
-      <section className="card">
+      <div className="conv__redactar">
         <MensajeForm empresaId={String(empresa.id)} hiloId={String(hilo.id)} />
-        {hilo.estado === 'resuelto' && !cmc && <p className="hint" style={{ marginTop: 8 }}>Si responde, la conversación se volverá a abrir.</p>}
-      </section>
-    </>
+        {resuelta && !cmc && <p className="hint" style={{ marginTop: 8 }}>La conversación está resuelta. Si responde, se volverá a abrir.</p>}
+      </div>
+    </Bandeja>
   )
 }

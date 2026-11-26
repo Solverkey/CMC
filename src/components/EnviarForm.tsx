@@ -124,12 +124,12 @@ export function EnviarForm({ empresaId, documentoId, tituloPorDefecto, categoria
       </div>
       {!categoriaId && categorias.length > 0 && (
         <div className="field">
-          <label htmlFor="categoria-nombre">Categoría</label>
+          <label htmlFor="categoria-nombre">Instalación</label>
           <select id="categoria-nombre" value={categoria} onChange={(e) => setCategoria(e.target.value)}>
             <option value="">Sin indicar</option>
             {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
           </select>
-          <span className="hint">Si la indica, el nombre prioriza los ya usados en esa categoría. CMC la confirma al publicar.</span>
+          <span className="hint">Si la indica, el nombre prioriza los ya usados en esa instalación. CMC la confirma al publicar.</span>
         </div>
       )}
       <div className="field"><label htmlFor="comentario">Comentario para CMC</label><textarea id="comentario" name="comentario" rows={2} /></div>

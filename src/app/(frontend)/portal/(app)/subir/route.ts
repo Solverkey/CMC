@@ -28,7 +28,7 @@ export async function POST(request: Request) {
       const titulo = String(f.get('titulo') ?? '').trim() || file.name
       const categoria = String(f.get('categoria') ?? '').trim()
       const empresa = String(f.get('empresa') ?? '').trim()
-      if (!categoria || !empresa) return NextResponse.json({ error: 'Indique la categoría, o asócielo a un documento existente.' }, { status: 400 })
+      if (!categoria || !empresa) return NextResponse.json({ error: 'Indique la instalación, o asócielo a un documento existente.' }, { status: 400 })
       const doc = await crearDocumento(req, {
         titulo,
         empresa: Number(empresa),

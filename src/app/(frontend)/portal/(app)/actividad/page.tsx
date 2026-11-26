@@ -1,9 +1,10 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { contar, listarActividad } from '@/datos/consultas'
-import { visible } from '@/datos/mapas'
+import { empresasDe } from '@/access'
+import { contar, filtroActividad, listarActividad } from '@/datos/consultas'
 import type { Empresa } from '@/datos/tipos'
 import { ACCIONES } from '@/lib/actividad'
+import { fechaValida } from '@/servicios/documentos'
 import { contexto, empresasDelUsuario, fmtHora } from '@/lib/payload'
 
 export const metadata = { title: 'Registro de actividad' }
@@ -14,7 +15,10 @@ const ORIGEN: Record<string, string> = { web: 'Portal', mcp: 'Asistente de IA', 
 export default async function ActividadPage({ searchParams }: { searchParams: Promise<{ empresa?: string; accion?: string; email?: string; desde?: string; hasta?: string; origen?: string; pagina?: string }> }) {
   const sp = await searchParams
   const { user, cmc } = await contexto('/portal/actividad')
-  const { empresas } = await empresasDelUsuario(user)
+  // Como en el menú: solo CMC y los administradores de empresa.
+  if (!cmc && !empresasDe(user, true).length) notFound()
+  const administradas = new Set(empresasDe(user, true).map(String))
+  const empresas = (await empresasDelUsuario(user)).empresas.filter((e) => cmc || administradas.has(String(e.id)))
   const pagina = Math.max(Number(sp.pagina) || 1, 1)
 
   const cond: string[] = []
@@ -26,11 +30,13 @@ export default async function ActividadPage({ searchParams }: { searchParams: Pr
   if (sp.empresa) add('empresa_id = ?', Number(sp.empresa))
   if (sp.accion) add('accion = ?', sp.accion)
   if (sp.origen) add('origen = ?', sp.origen)
-  if (sp.email) add('email LIKE ?', `%${sp.email}%`)
-  if (sp.desde) add('created_at >= ?', new Date(sp.desde).toISOString())
-  if (sp.hasta) add('created_at <= ?', new Date(`${sp.hasta}T23:59:59`).toISOString())
+  if (sp.email) add('LOWER(email) LIKE ?', `%${sp.email.toLowerCase()}%`)
+  const desde = fechaValida(sp.desde)
+  const hasta = fechaValida(sp.hasta, 'T23:59:59')
+  if (desde) add('created_at >= ?', desde)
+  if (hasta) add('created_at <= ?', hasta)
   const extra = cond.length ? `AND ${cond.join(' AND ')}` : ''
-  const filtro = `(${visible(user, 'empresa_id')} OR empresa_id IS NULL) ${extra}`
+  const filtro = `${filtroActividad(user)} ${extra}`
   const [docs, totalDocs] = await Promise.all([
     listarActividad(user, extra, params, 100, (pagina - 1) * 100),
     contar('actividad', filtro, params),

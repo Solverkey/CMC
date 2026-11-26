@@ -64,7 +64,7 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
         </div>
         <div className="row">
           {vigente?.url && <BotonDescarga url={vigente.url} nombre={vigente.filename} className="btn btn--primary"><Icon name="download" />Descargar</BotonDescarga>}
-          {!cmc && <Link href={`/portal/mensajes/nuevo?empresa=${empresa.id}&documento=${doc.id}`} className="btn btn--secondary"><Icon name="chat" />Preguntar a CMC</Link>}
+          <Link href={`/portal/mensajes/nuevo?empresa=${empresa.id}&documento=${doc.id}`} className="btn btn--secondary"><Icon name="chat" />{cmc ? 'Escribir al cliente' : 'Preguntar a CMC'}</Link>
           {cmc && (
             <EditarDocumento
               id={String(doc.id)}
@@ -96,7 +96,7 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
             <dl className="dl">
               <div><dt>Referencia</dt><dd>{doc.referencia || '—'}</dd></div>
               <div><dt>Organismo emisor</dt><dd>{doc.organismo || '—'}</dd></div>
-              <div><dt>Categoría</dt><dd>{categoria?.nombre}</dd></div>
+              <div><dt>Instalación</dt><dd>{categoria?.nombre}</dd></div>
               <div><dt>Fecha de emisión</dt><dd>{fmt(doc.fechaEmision)}</dd></div>
               <div><dt>Fecha de caducidad</dt><dd>{doc.fechaCaducidad ? fmt(doc.fechaCaducidad) : 'Indefinido'}</dd></div>
               <div><dt>Fecha de aviso</dt><dd>{fmt(doc.fechaAviso)}</dd></div>

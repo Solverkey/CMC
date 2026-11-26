@@ -1,7 +1,7 @@
 import { after } from 'next/server'
 import nodemailer from 'nodemailer'
 import { registrar } from './actividad'
-import type { Ctx } from './ctx'
+import { ctxSistema, type Ctx } from './ctx'
 import { firmar } from './cifrado'
 import { leerConfiguracion, urlServidor, type Config } from './configuracion'
 import { ahora, ejecutar, filas, jsonParam, jsonSql, uno } from './db'
@@ -167,4 +167,63 @@ export async function vaciarCola(limite = 50) {
     }
   }
   return { revisados: pendientes.length, enviados, errores }
+}
+
+// ——— Seguimiento: webhook del proveedor y píxel de apertura ———
+
+const ESTADOS_EVENTO: Record<string, 'entregado' | 'abierto' | 'rebotado' | 'error'> = {
+  delivered: 'entregado',
+  'email.delivered': 'entregado',
+  entregado: 'entregado',
+  opened: 'abierto',
+  'email.opened': 'abierto',
+  abierto: 'abierto',
+  bounced: 'rebotado',
+  bounce: 'rebotado',
+  'email.bounced': 'rebotado',
+  rebotado: 'rebotado',
+  complained: 'rebotado',
+  'email.complained': 'rebotado',
+  failed: 'error',
+  dropped: 'error',
+}
+
+type FilaCorreo = { id: number; asunto: string; para: string; empresa_id: number | null; estado: string | null }
+
+/** Anota un evento de entrega. El estado solo avanza (pendiente → enviado → entregado → abierto); rebote y error mandan siempre. */
+export async function marcarCorreo(correo: FilaCorreo, evento: 'entregado' | 'abierto' | 'rebotado' | 'error') {
+  const orden = ['pendiente', 'enviado', 'entregado', 'abierto']
+  const avanza = evento === 'rebotado' || evento === 'error' || orden.indexOf(evento) > orden.indexOf(correo.estado ?? 'pendiente')
+  const campo = { entregado: 'entregado_en', abierto: 'abierto_en', rebotado: 'rebote_en', error: 'rebote_en' }[evento]
+  const momento = ahora()
+  await ejecutar(`UPDATE correos SET ${campo} = $2, ${avanza ? 'estado = $3,' : ''} updated_at = $2 WHERE id = $1`, avanza ? [correo.id, momento, evento] : [correo.id, momento])
+  await registrar(ctxSistema(), {
+    accion: ({ entregado: 'correo_entregado', abierto: 'correo_abierto', rebotado: 'correo_rebotado', error: 'correo_error' } as const)[evento],
+    descripcion: `Correo «${correo.asunto}» a ${correo.para}: ${evento}`,
+    empresa: correo.empresa_id,
+    coleccion: 'correos',
+    registroId: correo.id,
+  })
+}
+
+/**
+ * Webhook del proveedor de correo (/api/correos/eventos?secreto=… o cabecera x-webhook-secret).
+ * Acepta { messageId, evento } o los formatos de Resend, Postmark y SendGrid, sueltos o en lista.
+ */
+export async function eventosCorreo(cuerpo: unknown) {
+  const eventos = (Array.isArray(cuerpo) ? cuerpo : [cuerpo]) as Record<string, any>[] // eslint-disable-line @typescript-eslint/no-explicit-any
+  let procesados = 0
+  for (const ev of eventos) {
+    if (!ev || typeof ev !== 'object') continue
+    const tipo = String(ev.evento ?? ev.type ?? ev.RecordType ?? ev.event ?? '').toLowerCase()
+    const messageId = String(ev.messageId ?? ev.data?.email_id ?? ev.MessageID ?? ev['smtp-id'] ?? '').replace(/[<>]/g, '')
+    const estado = ESTADOS_EVENTO[tipo]
+    if (!estado || !messageId) continue
+    const correo = await uno<FilaCorreo>('SELECT id, asunto, para, empresa_id, estado FROM correos WHERE message_id = $1 OR message_id = $2 LIMIT 1', [messageId, `<${messageId}>`])
+    if (correo) {
+      await marcarCorreo(correo, estado)
+      procesados++
+    }
+  }
+  return procesados
 }

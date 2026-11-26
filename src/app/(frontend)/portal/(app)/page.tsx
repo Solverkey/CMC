@@ -102,7 +102,7 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
               <button className="btn btn--secondary btn--sm" type="submit">Guardar estándar</button>
             </FormAccion>
           )}
-          {categorias.length === 0 && <p className="muted">Sin categorías.</p>}
+          {categorias.length === 0 && <p className="muted">Sin instalaciones.</p>}
           {categorias.map((c) => {
             const deCat = lista.filter((d) => idDe(d.categoria) === String(c.id) && visibles.includes(d.estado as Estado))
             return (

@@ -15,8 +15,12 @@ async function leer(req: Ctx) {
   return u
 }
 
-export async function iniciar2FA(req: Ctx) {
+export async function iniciar2FA(req: Ctx, codigoActual?: string) {
   const u = await leer(req)
+  // Con el doble factor ya activo, cambiar de aplicación exige un código de la actual: una sesión robada no basta.
+  if (u.totpActivo && (!u.totpSecreto || !codigoActual || !verificar(descifrar(u.totpSecreto), codigoActual, u.totpUltimoPaso))) {
+    throw new AppError('Para cambiar de aplicación indique un código de la que usa ahora.', 400)
+  }
   const secreto = nuevoSecreto()
   await ejecutar('UPDATE users SET totp_pendiente = $2, updated_at = $3 WHERE id = $1', [u.id, cifrar(secreto), ahora()])
   const uri = uriOtpauth(secreto, u.email)

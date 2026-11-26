@@ -29,11 +29,23 @@ export async function almacenamiento() {
     for (const r of rows) {
       const n = Number(r.total ?? 0)
       ficheros += n
-      if (r.empresa != null) porEmpresa[String(r.empresa)] = (porEmpresa[String(r.empresa)] ?? 0) + n
+      const k = r.empresa == null ? 'sin' : String(r.empresa)
+      porEmpresa[k] = (porEmpresa[k] ?? 0) + n
     }
   }
-  const media = await filas<{ total: number | string | null }>('SELECT SUM(filesize) AS total FROM media')
-  ficheros += Number(media[0]?.total ?? 0)
+  // Imágenes: el logotipo de una empresa cuenta para ella; el resto (web, vídeos) va a «sin empresa».
+  // Así la suma de las filas es el total de archivos.
+  const media = await filas<{ empresa: number | string | null; total: number | string | null }>(
+    'SELECT (SELECT MIN(e.id) FROM empresas e WHERE e.logo_id = m.id) AS empresa, SUM(m.filesize) AS total FROM media m GROUP BY 1',
+  )
+  const videos = await filas<{ total: number | string | null }>('SELECT SUM(filesize) AS total FROM videos').catch(() => [])
+  for (const r of [...media, ...videos.map((v) => ({ empresa: null, total: v.total }))]) {
+    const n = Number(r.total ?? 0)
+    if (!n) continue
+    ficheros += n
+    const k = r.empresa == null ? 'sin' : String(r.empresa)
+    porEmpresa[k] = (porEmpresa[k] ?? 0) + n
+  }
 
   let bd = 0
   if (esPostgres) {

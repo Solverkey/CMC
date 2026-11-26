@@ -31,7 +31,7 @@ export default async function EnviarPage({ searchParams }: { searchParams: Promi
       <div className="stack" style={{ gap: 4 }}>
         <p className="small muted">{sp.empresa ? empresa.razonSocial : 'Todas las empresas'}</p>
         <h1>Bandeja de envíos</h1>
-        <p className="muted">Documentos enviados por los clientes. Revise cada uno, complete la categoría y las fechas, y publíquelo o rechácelo indicando el motivo.</p>
+        <p className="muted">Documentos enviados por los clientes. Revise cada uno, complete la instalación y las fechas, y publíquelo o rechácelo indicando el motivo.</p>
       </div>
 
       <section className="stack">

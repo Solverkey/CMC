@@ -32,7 +32,7 @@ export function FormDocumento({ id, empresaId, empresaNombre, categorias, valore
         <input type="hidden" name="empresa" value={empresaId} />
         <div className="field"><label htmlFor="titulo">Título</label><input className="input" id="titulo" name="titulo" required defaultValue={valores.titulo} /></div>
         <div className="field">
-          <label htmlFor="categoria">Categoría</label>
+          <label htmlFor="categoria">Instalación</label>
           <select className="input" id="categoria" name="categoria" required defaultValue={valores.categoria}>
             <option value="">Elegir</option>
             {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}

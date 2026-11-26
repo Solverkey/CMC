@@ -1,10 +1,12 @@
 import { redirect } from 'next/navigation'
 import { FormAccion } from '@/components/FormAccion'
 import { crearSelector, quitarSelector } from '@/app/(frontend)/portal/acciones'
-import { listarCatalogoActivo } from '@/lib/catalogo'
+import { EFECTOS, listarCatalogoActivo } from '@/lib/catalogo'
 import { contexto } from '@/lib/payload'
 
 export const metadata = { title: 'Selectores' }
+
+const EFECTO = new Map<string, string>(EFECTOS.map((e) => [e.value, e.label]))
 
 const TIPOS = [
   { id: 'categoria', texto: 'Instalaciones' },
@@ -21,7 +23,7 @@ export default async function SelectoresPage() {
     <>
       <div className="stack" style={{ gap: 4 }}>
         <h1>Selectores</h1>
-        <p className="muted">Opciones que salen al escribir un nombre. Se pueden añadir y quitar. Quitar una opción no borra los documentos que ya la usan.</p>
+        <p className="muted">Opciones que salen al escribir un nombre. Se pueden añadir y quitar. Quitar una opción no borra los documentos que ya la usan, y se puede volver a añadir.</p>
       </div>
       {TIPOS.map((tipo) => {
         const opciones = lista.filter((o) => o.tipo === tipo.id)
@@ -34,14 +36,28 @@ export default async function SelectoresPage() {
                 <label htmlFor={`nuevo-${tipo.id}`}>Nueva opción</label>
                 <input className="input" id={`nuevo-${tipo.id}`} name="nombre" required />
               </div>
+              {tipo.id === 'relacion' && (
+                <fieldset className="row" style={{ flex: '1 1 100%', gap: 12, border: 0, padding: 0, margin: 0 }}>
+                  <legend className="small" style={{ fontWeight: 600, marginBottom: 6 }}>Efecto sobre el documento (al menos uno)</legend>
+                  {EFECTOS.map((e) => (
+                    <label key={e.value} className="row small" style={{ gap: 6 }}>
+                      <input type="checkbox" name="efectos" value={e.value} defaultChecked={e.value === 'complementario'} />
+                      {e.label}
+                    </label>
+                  ))}
+                </fieldset>
+              )}
               <button className="btn btn--primary" type="submit">Añadir</button>
             </FormAccion>
             {opciones.length === 0 && <p className="muted">Todavía no hay opciones.</p>}
             <ul className="stack" style={{ listStyle: 'none', margin: 0, padding: 0, gap: 8 }}>
               {opciones.map((o) => (
                 <li key={o.id} className="row" style={{ justifyContent: 'space-between' }}>
-                  <span>{o.nombre}</span>
-                  <FormAccion accion={quitarSelector}>
+                  <span>
+                    {o.nombre}
+                    {tipo.id === 'relacion' && Boolean(o.efectos?.length) && <span className="small muted"> · {o.efectos!.map((e) => EFECTO.get(e) ?? e).join(', ')}</span>}
+                  </span>
+                  <FormAccion accion={quitarSelector} confirmar={`¿Quitar «${o.nombre}» del selector?`}>
                     <input type="hidden" name="id" value={o.id} />
                     <button className="btn btn--secondary btn--sm" type="submit">Quitar</button>
                   </FormAccion>

@@ -44,9 +44,10 @@ export default async function AlmacenamientoPage() {
         <table className="table">
           <thead><tr><th>Empresa</th><th>Espacio</th><th>% del total</th></tr></thead>
           <tbody>
+            {filas.length === 0 && <tr><td colSpan={3} className="muted">Todavía no hay archivos.</td></tr>}
             {filas.map(([id, bytes]) => (
               <tr key={id}>
-                <td>{nombre.get(id) ?? (id === 'sin' ? 'Sin empresa (logotipos, etc.)' : `Empresa ${id}`)}</td>
+                <td>{nombre.get(id) ?? (id === 'sin' ? 'Sin empresa (imágenes y vídeos de la web, archivos sin empresa)' : `Empresa ${id}`)}</td>
                 <td>{tamano(bytes)}</td>
                 <td>{uso.ficheros ? Math.round((bytes / uso.ficheros) * 100) : 0} %</td>
               </tr>
