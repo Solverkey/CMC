@@ -2,6 +2,7 @@
 import { usePathname, useRouter } from 'next/navigation'
 import { useRef, useState } from 'react'
 import { Icon } from './Icon'
+import { Desplegable } from './Desplegable'
 
 type Props = {
   empresaId: string
@@ -94,10 +95,8 @@ export function MensajeForm({ empresaId, hiloId, documentoId, categoriaId, asunt
         <>
           {empresas && empresas.length > 1 && (
             <div className="field">
-              <label htmlFor="empresa-nueva">Empresa</label>
-              <select id="empresa-nueva" value={empresaId} onChange={(e) => router.replace(`${ruta}?empresa=${e.target.value}`)}>
-                {empresas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
-              </select>
+              <label>Empresa</label>
+              <Desplegable key={empresaId} etiqueta="Empresa" opciones={empresas.map((e) => ({ valor: e.id, texto: e.nombre }))} valor={empresaId} alCambiar={(v) => router.replace(`${ruta}?empresa=${v}`)} />
             </div>
           )}
           {sobre && <p className="small muted">Sobre: {sobre}</p>}
