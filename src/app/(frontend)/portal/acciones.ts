@@ -15,6 +15,7 @@ import { empresaPorId } from '@/datos/consultas'
 import { actualizarCategoria, actualizarDocumento, actualizarEmpresa, crearEmpresa, crearMedia, resolverEnvio as publicarEnvio } from '@/datos/operaciones'
 import { crearCatalogo, desactivarCatalogo, type Efecto } from '@/lib/catalogo'
 import { adjuntoADocumento, gestionarHilo as actualizarHilo, vincularDocumento } from '@/servicios/comunicacion'
+import * as Selectores from '@/servicios/selectores'
 import type { Fichero } from '@/lib/subidas'
 
 export type Resultado = { ok?: string; error?: string; clave?: string } | null
@@ -349,4 +350,52 @@ export async function vincularDocumentoHilo(_: Resultado, f: FormData): Promise<
     await vincularDocumento(req, campo(f, 'hilo'), documento || null)
     return documento ? 'Conversación vinculada al documento.' : 'Conversación desvinculada.'
   })
+}
+
+// ── Selectores editables desde el propio formulario ──────────────────────────
+export type RespuestaSelector<T> = { ok: true; dato: T } | { ok: false; error: string }
+
+async function selector<T>(fn: (req: Awaited<ReturnType<typeof contexto>>['req']) => Promise<T>): Promise<RespuestaSelector<T>> {
+  try {
+    const { req } = await comoCmc()
+    const dato = await fn(req)
+    revalidatePath('/portal', 'layout')
+    return { ok: true, dato }
+  } catch (e) {
+    return { ok: false, error: (e as Error).message || 'No se ha podido guardar.' }
+  }
+}
+
+type TipoNombre = 'documento' | 'relacion' | 'categoria'
+const tipoValido = (t: string): TipoNombre => {
+  if (t !== 'documento' && t !== 'relacion' && t !== 'categoria') throw new Error('Tipo no válido.')
+  return t
+}
+
+export async function selectorCrearInstalacion(empresa: string, nombre: string) {
+  return selector((req) => Selectores.crearInstalacion(req, empresa, nombre))
+}
+export async function selectorRenombrarInstalacion(id: string, nombre: string) {
+  return selector((req) => Selectores.renombrarInstalacion(req, id, nombre))
+}
+export async function selectorQuitarInstalacion(id: string) {
+  return selector((req) => Selectores.quitarInstalacion(req, id))
+}
+export async function selectorDocumentosDeInstalacion(id: string) {
+  return selector(() => Selectores.documentosDeInstalacion(id))
+}
+export async function selectorOpciones(tipo: string) {
+  return selector((req) => Selectores.opcionesCatalogo(req, tipoValido(tipo)))
+}
+export async function selectorUsos(tipo: string, nombre: string) {
+  return selector((req) => Selectores.usosDeNombre(req, tipoValido(tipo), nombre))
+}
+export async function selectorCrear(tipo: string, nombre: string, efectos?: string[]) {
+  return selector((req) => Selectores.crearEnCatalogo(req, tipoValido(tipo), nombre, efectos))
+}
+export async function selectorRenombrar(tipo: string, actual: string, nombre: string) {
+  return selector((req) => Selectores.renombrarEnCatalogo(req, tipoValido(tipo), actual, nombre))
+}
+export async function selectorQuitar(tipo: string, nombre: string) {
+  return selector((req) => Selectores.quitarDeCatalogo(req, tipoValido(tipo), nombre))
 }

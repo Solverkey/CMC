@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation'
 import { BotonDescarga } from '@/components/BotonDescarga'
 import { FormAccion } from '@/components/FormAccion'
 import { VisorArchivo } from '@/components/VisorArchivo'
+import { SelectorCatalogo, SelectorInstalacion } from '@/components/Selectores'
 import { resolverEnvio } from '@/app/(frontend)/portal/acciones'
 import { conversacionDeEnvio } from '@/datos/adjuntos'
 import { categoriasDeEmpresa, envioPorId, listarDocumentos } from '@/datos/consultas'
@@ -63,14 +64,11 @@ export default async function RevisarEnvio({ params }: { params: Promise<{ id: s
           </div>
           <div className="field">
             <label htmlFor="categoriaDestino">Instalación, si es nuevo</label>
-            <select className="input" id="categoriaDestino" name="categoriaDestino">
-              <option value="">Elegir</option>
-              {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-            </select>
+            <SelectorInstalacion id="categoriaDestino" name="categoriaDestino" empresaId={empresaId} instalaciones={categorias.map((c) => ({ id: String(c.id), nombre: c.nombre }))} />
           </div>
           <div className="row">
-            <div className="field" style={{ flex: '1 1 140px' }}><label htmlFor="tituloFinal">Nombre definitivo</label><input className="input" id="tituloFinal" name="tituloFinal" defaultValue={envio.titulo} /></div>
-            <div className="field" style={{ flex: '1 1 120px' }}><label htmlFor="relacionFinal">Tipo de relación</label><input className="input" id="relacionFinal" name="relacionFinal" defaultValue={envio.relacion ?? 'Renovación'} /></div>
+            <div className="field" style={{ flex: '1 1 200px' }}><label htmlFor="tituloFinal">Nombre definitivo</label><SelectorCatalogo tipo="documento" etiqueta="Nombre definitivo" id="tituloFinal" name="tituloFinal" valor={envio.titulo} /></div>
+            <div className="field" style={{ flex: '1 1 160px' }}><label htmlFor="relacionFinal">Tipo de relación</label><SelectorCatalogo tipo="relacion" etiqueta="Tipo de relación" id="relacionFinal" name="relacionFinal" valor={envio.relacion ?? 'Renovación'} /></div>
           </div>
           <div className="row">
             <div className="field" style={{ flex: '1 1 0' }}><label htmlFor="fechaEmision">Emisión</label><input className="input" id="fechaEmision" name="fechaEmision" type="date" /></div>

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Icon } from './Icon'
+import { SelectorCatalogo, SelectorInstalacion } from './Selectores'
 
 type Categoria = { id: string; nombre: string }
 
@@ -52,18 +53,22 @@ export function SubirDocumento({ empresaId, categorias = [], documentos = [], do
       )}
       {!anadir && (
         <>
-          <div className="field"><label htmlFor="titulo-subida">Nombre</label><input className="input" id="titulo-subida" name="titulo" placeholder="Si se deja vacío, se usa el del archivo" /></div>
+          <div className="field">
+            <label htmlFor="titulo-subida">Nombre</label>
+            <SelectorCatalogo tipo="documento" etiqueta="Nombre" id="titulo-subida" name="titulo" placeholder="Si se deja vacío, se usa el del archivo" />
+          </div>
           <div className="field">
             <label htmlFor="categoria-subida">Instalación</label>
-            <select className="input" id="categoria-subida" name="categoria" defaultValue="">
-              <option value="">Elegir</option>
-              {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-            </select>
+            <SelectorInstalacion id="categoria-subida" name="categoria" empresaId={empresaId} instalaciones={categorias} />
+            <span className="hint">Si no está, escríbala y elija «Crear la instalación». También puede renombrarlas o quitarlas desde aquí.</span>
           </div>
         </>
       )}
       {anadir && (
-        <div className="field"><label htmlFor="relacion-subida">Tipo de relación</label><input className="input" id="relacion-subida" name="relacion" defaultValue="Renovación" /></div>
+        <div className="field">
+          <label htmlFor="relacion-subida">Tipo de relación</label>
+          <SelectorCatalogo tipo="relacion" etiqueta="Tipo de relación" id="relacion-subida" name="relacion" valor="Renovación" />
+        </div>
       )}
       <div className="row">
         {!anadir && <div className="field" style={{ flex: '1 1 160px' }}><label htmlFor="emision-subida">Emisión</label><input className="input" id="emision-subida" name="fechaEmision" type="date" /></div>}

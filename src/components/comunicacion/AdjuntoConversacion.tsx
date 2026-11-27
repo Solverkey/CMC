@@ -4,10 +4,10 @@ import { useRouter } from 'next/navigation'
 import { useCallback, useRef, useState } from 'react'
 import { incorporarAdjunto } from '@/app/(frontend)/portal/acciones'
 import type { DestinoAdjunto } from '@/datos/adjuntos'
-import { Combobox } from '../Combobox'
 import { Desplegable } from '../Desplegable'
 import { FormAccion } from '../FormAccion'
 import { Icon } from '../Icon'
+import { SelectorCatalogo } from '../Selectores'
 import { Enlace as Link } from '../Enlace'
 
 type Props = {
@@ -111,7 +111,7 @@ export function AdjuntoConversacion({ adjunto, destino, cmc, documentos = [], do
                 </div>
                 <div className="field">
                   <label htmlFor={`relacion-${adjunto.id}`}>Tipo de archivo</label>
-                  <Combobox tipo="relacion" id={`relacion-${adjunto.id}`} name="relacion" defaultValue="Renovación" />
+                  <SelectorCatalogo tipo="relacion" etiqueta="Tipo de archivo" id={`relacion-${adjunto.id}`} name="relacion" valor="Renovación" />
                   <span className="hint">Renovación sustituye al vigente y actualiza las fechas; Anexo se añade sin cambiar nada; Subsanación puede levantar la condición.</span>
                 </div>
                 <div className="row">
