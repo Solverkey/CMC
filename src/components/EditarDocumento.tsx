@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { guardarDocumento } from '@/app/(frontend)/portal/acciones'
 import { FormAccion } from './FormAccion'
 import { Icon } from './Icon'
+import { SelectorCatalogo, SelectorInstalacion } from './Selectores'
 
 type Valores = {
   titulo: string
@@ -45,13 +46,13 @@ export function EditarDocumento({ id, empresaId, categorias, valores }: { id: st
           <FormAccion key={turno} accion={guardarDocumento} alTerminar={cerrar} className="stack" style={{ gap: 16 }}>
             <input type="hidden" name="id" value={id} />
             <input type="hidden" name="empresa" value={empresaId} />
-            <div className="field"><label htmlFor="ed-titulo">Título</label><input className="input" id="ed-titulo" name="titulo" required defaultValue={valores.titulo} /></div>
+            <div className="field">
+              <label htmlFor="ed-titulo">Título</label>
+              <SelectorCatalogo tipo="documento" etiqueta="Título" id="ed-titulo" name="titulo" required valor={valores.titulo} />
+            </div>
             <div className="field">
               <label htmlFor="ed-categoria">Instalación</label>
-              <select className="input" id="ed-categoria" name="categoria" required defaultValue={valores.categoria}>
-                <option value="">Elegir</option>
-                {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-              </select>
+              <SelectorInstalacion id="ed-categoria" name="categoria" required empresaId={empresaId} instalaciones={categorias} valor={valores.categoria} />
             </div>
             <div className="row">
               <div className="field" style={{ flex: '1 1 200px' }}><label htmlFor="ed-referencia">Referencia</label><input className="input" id="ed-referencia" name="referencia" defaultValue={valores.referencia} /></div>
