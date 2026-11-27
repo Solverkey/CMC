@@ -1,3 +1,4 @@
+import { AvisoCorreo } from '@/components/AvisoCorreo'
 import { redirect } from 'next/navigation'
 import { guardarConfiguracion } from '@/app/(frontend)/portal/acciones'
 import { FilasPlantilla } from '@/components/FilasPlantilla'
@@ -23,6 +24,7 @@ export default async function ConfiguracionPage() {
 
   return (
     <>
+      <AvisoCorreo />
       <div className="stack" style={{ gap: 4 }}>
         <p className="small muted">CMC</p>
         <h1>Configuración</h1>

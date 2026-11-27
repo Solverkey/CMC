@@ -54,7 +54,7 @@ export async function leerConfiguracion(): Promise<Config> {
     frecuenciaCaducado: g.frecuencia_caducado === 'mensual' ? 'mensual' : 'semanal',
     maxRecordatoriosCaducado: n(g.max_recordatorios_caducado, 6),
     remitenteNombre: String(g.remitente_nombre || process.env.EMAIL_FROM_NAME || 'CMC · Portal documental'),
-    remitenteEmail: String(g.remitente_email || process.env.EMAIL_FROM || 'avisos@localhost'),
+    remitenteEmail: String(g.remitente_email || process.env.EMAIL_FROM || ''),
     responderA: (g.responder_a as string) || process.env.EMAIL_REPLY_TO || undefined,
     logoUrl,
     logoId: g.logo_id == null ? null : Number(g.logo_id),

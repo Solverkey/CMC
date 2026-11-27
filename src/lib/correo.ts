@@ -50,6 +50,11 @@ ${enlace && boton ? `<p style="margin:24px 0"><a href="${escaparHtml(enlace)}" s
 </body></html>`
 }
 
+/** Hay servidor de correo. Sin él, en local los correos se escriben en la consola; en Vercel no salen y se marcan como no enviados. */
+export const correoConfigurado = () => Boolean(process.env.SMTP_HOST)
+export const correoSinConfigurarEnServidor = () => !correoConfigurado() && Boolean(process.env.VERCEL)
+export const MOTIVO_SIN_SMTP = 'No enviado: el servidor de correo (SMTP) no está configurado.'
+
 const transporte = () =>
   process.env.SMTP_HOST
     ? nodemailer.createTransport({
@@ -106,7 +111,7 @@ export async function programarCorreo(req: Ctx, p: Programar) {
     if (!correo) continue
     const pixel = `${urlServidor()}/api/correos/${correo.id}/abierto?f=${firmar(String(correo.id), 'pixel')}`
     const html = maquetar(cfg, { asunto, cuerpo, boton: t.boton, enlace: p.enlace, pixel })
-    const desde = `"${cfg.remitenteNombre.replace(/"/g, '')}" <${cfg.remitenteEmail}>`
+    const desde = `"${cfg.remitenteNombre.replace(/"/g, '')}" <${cfg.remitenteEmail || 'avisos@localhost'}>`
     await ejecutar(`INSERT INTO payload_kv (key, data) VALUES ($1, ${jsonSql(2)})`, [
       `correo:${correo.id}`,
       jsonParam({ html, desde, responderA: p.responderA ?? cfg.responderA ?? '', intentos: 0 }),
@@ -130,8 +135,9 @@ function enviarAlResponder() {
 
 /** Envía los correos pendientes. El cron nocturno llama aquí con un límite alto. */
 export async function vaciarCola(limite = 50) {
+  // Solo los que aún tienen su contenido guardado: los descartados no deben ocupar la cola para siempre.
   const pendientes = await filas<{ id: number; para: string; asunto: string; empresa_id: number | null }>(
-    `SELECT id, para, asunto, empresa_id FROM correos WHERE estado IN ('pendiente', 'error') ORDER BY id LIMIT $1`,
+    `SELECT id, para, asunto, empresa_id FROM correos c WHERE estado IN ('pendiente', 'error') AND EXISTS (SELECT 1 FROM payload_kv k WHERE k.key = 'correo:' || c.id) ORDER BY id LIMIT $1`,
     [limite],
   )
   const mailer = transporte()
@@ -140,8 +146,17 @@ export async function vaciarCola(limite = 50) {
   for (const correo of pendientes) {
     const guardado = await uno<{ data: unknown }>('SELECT data FROM payload_kv WHERE key = $1', [`correo:${correo.id}`])
     const data = (typeof guardado?.data === 'string' ? JSON.parse(guardado.data) : guardado?.data) as { html?: string; desde?: string; responderA?: string; intentos?: number } | null
-    if (!data?.html || !data.desde) continue
-    if ((data.intentos ?? 0) >= 4) continue
+    if (!data?.html || !data.desde || (data.intentos ?? 0) >= 4) {
+      await ejecutar('DELETE FROM payload_kv WHERE key = $1', [`correo:${correo.id}`])
+      continue
+    }
+    if (correoSinConfigurarEnServidor()) {
+      // Sin servidor de correo no se puede decir que se ha enviado: queda como no enviado y con el motivo.
+      await ejecutar(`UPDATE correos SET estado = 'error', error = $2, updated_at = $3 WHERE id = $1`, [correo.id, MOTIVO_SIN_SMTP, ahora()])
+      await ejecutar('DELETE FROM payload_kv WHERE key = $1', [`correo:${correo.id}`])
+      errores++
+      continue
+    }
     try {
       const res = await mailer.sendMail({
         from: data.desde,
