@@ -1,4 +1,4 @@
-import Link from 'next/link'
+import { Enlace as Link } from '@/components/Enlace'
 import { FormAccion } from './FormAccion'
 import { guardarDocumento } from '@/app/(frontend)/portal/acciones'
 

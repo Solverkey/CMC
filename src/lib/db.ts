@@ -103,7 +103,20 @@ const valor = (v: unknown) => (v instanceof Date ? v.toISOString() : typeof v ==
 
 const fila = (row: Fila): Fila => Object.fromEntries(Object.entries(row).map(([k, v]) => [k, valor(v)]))
 
+/** Con CMC_TRAZA_SQL=1 se escribe cada consulta y su duración: sirve para medir cuántas hace cada página. */
+const traza = process.env.CMC_TRAZA_SQL === '1'
+
 export async function filas<T = Fila>(sql: string, params: unknown[] = []): Promise<T[]> {
+  if (!traza) return filasSinTraza<T>(sql, params)
+  const t0 = performance.now()
+  try {
+    return await filasSinTraza<T>(sql, params)
+  } finally {
+    console.info(`[sql] ${(performance.now() - t0).toFixed(1)}ms ${sql.replace(/\s+/g, ' ').slice(0, 110)}`)
+  }
+}
+
+async function filasSinTraza<T = Fila>(sql: string, params: unknown[] = []): Promise<T[]> {
   if (esPostgres) {
     const cliente = clientePostgres()
     await apiCerrada()

@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { empresasDe, esSuperAdmin } from '@/access'
 import type { Archivo, Categoria, Documento, Empresa, Envio, Hilo, Mensaje, User } from './tipos'
 import { ahora, ejecutar, esPostgres, filas, uno } from '@/lib/db'
@@ -72,23 +73,23 @@ async function efectosArchivo(lista: number[]) {
   return mapa
 }
 
-export async function empresaVisible(user: User | null, id: number | string): Promise<Empresa | null> {
+export const empresaVisible = cache(async function empresaVisible(user: User | null, id: number | string): Promise<Empresa | null> {
   const e = await empresaPorId(id)
   if (!e || !user) return null
   if (esSuperAdmin(user)) return e
   if (e.activa === false) return null
   return empresasDe(user).map(String).includes(String(e.id)) ? e : null
-}
+})
 
-export async function empresaPorId(id: number | string) {
+export const empresaPorId = cache(async function empresaPorId(id: number | string) {
   const mapa = await empresas([Number(id)])
   return mapa.get(Number(id)) ?? null
-}
+})
 
-export async function categoriaPorId(id: number | string) {
+export const categoriaPorId = cache(async function categoriaPorId(id: number | string) {
   const row = await uno<Fila>('SELECT * FROM categorias WHERE id = $1', [Number(id)])
   return row ? mapCategoria(row) : null
-}
+})
 
 async function conUrls<T extends { filename?: string | null; url?: string | null }>(coleccion: string, items: T[]) {
   await Promise.all(
@@ -99,13 +100,13 @@ async function conUrls<T extends { filename?: string | null; url?: string | null
   return items
 }
 
-export async function documentoPorId(id: number | string, user?: User | null): Promise<Documento | null> {
+export const documentoPorId = cache(async function documentoPorId(id: number | string, user?: User | null): Promise<Documento | null> {
   const filtro = user ? `AND ${visible(user, 'empresa_id')}` : ''
   const row = await uno<Fila>(`SELECT * FROM documentos WHERE id = $1 ${filtro}`, [Number(id)])
   if (!row) return null
   const [doc] = await hidratarDocumentos([mapDocumento(row)])
   return doc
-}
+})
 
 export async function hidratarDocumentos(docs: Documento[]) {
   const emps = await empresas(docs.map((d) => Number(d.empresa)))
@@ -164,13 +165,13 @@ export async function listarHilos(user: User | null, sqlExtra: string, params: u
   return completarHilos(rows.map(mapHilo))
 }
 
-export async function hiloPorId(id: number | string, user?: User | null): Promise<Hilo | null> {
+export const hiloPorId = cache(async function hiloPorId(id: number | string, user?: User | null): Promise<Hilo | null> {
   const filtro = user ? `AND ${visible(user, 'empresa_id')}` : ''
   const row = await uno<Fila>(`SELECT * FROM hilos WHERE id = $1 ${filtro}`, [Number(id)])
   if (!row) return null
   const [hilo] = await completarHilos([mapHilo(row)])
   return hilo ?? null
-}
+})
 
 export async function mensajesDeHilo(hiloId: number | string) {
   const rows = await filas<Fila>('SELECT * FROM mensajes WHERE hilo_id = $1 ORDER BY created_at', [Number(hiloId)])

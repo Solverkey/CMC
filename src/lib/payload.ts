@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { headers as nextHeaders } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { esSuperAdmin, empresasDe, superAdminSin2FA } from '@/access'
@@ -41,7 +42,7 @@ async function conEmails(rows: Fila[]): Promise<Empresa[]> {
 }
 
 /** Empresas accesibles por el usuario y la empresa activa (?empresa=ID; por defecto la primera). */
-export async function empresasDelUsuario(user: User, activa?: string) {
+export const empresasDelUsuario = cache(async function empresasDelUsuario(user: User, activa?: string) {
   const activaBit = bit(true)
   const ids = esSuperAdmin(user) ? null : empresasDe(user).map(Number)
   if (ids && !ids.length) return { empresas: [] as Empresa[], empresa: null }
@@ -54,7 +55,7 @@ export async function empresasDelUsuario(user: User, activa?: string) {
   const empresas = await conEmails(rows)
   const empresa = empresas.find((e) => String(e.id) === activa) ?? empresas[0] ?? null
   return { empresas, empresa }
-}
+})
 
 export const fmt = (d?: string | null) => (d ? new Date(d).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—')
 export const fmtHora = (d?: string | null) => (d ? new Date(d).toLocaleString('es-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—')

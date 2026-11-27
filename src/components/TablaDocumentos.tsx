@@ -1,4 +1,4 @@
-import Link from 'next/link'
+import { Enlace as Link } from '@/components/Enlace'
 import { Icon } from '@/components/Icon'
 import { ESTADOS, resolverGestion, type Estado } from '@/lib/estado'
 import { plazo } from '@/lib/plazo'

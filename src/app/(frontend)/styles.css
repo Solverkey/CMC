@@ -539,3 +539,12 @@ img.visor { height: auto; max-height: 720px; object-fit: contain; }
 .ajustes > summary::-webkit-details-marker { display: none; }
 .ajustes__caja { position: absolute; right: 0; top: calc(100% + 6px); z-index: 6; width: min(320px, 80vw); padding: var(--space-4); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface-raised); box-shadow: var(--shadow-card); }
 .instalacion .ajustes { margin-left: auto; }
+
+/* Esqueleto de carga del portal */
+.esqueleto { display: flex; flex-direction: column; gap: var(--space-4); animation: aparecer .2s ease .15s both; }
+.esqueleto__fila { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--space-4); }
+.esqueleto__linea, .esqueleto__bloque { border-radius: var(--radius-md); background: linear-gradient(90deg, var(--surface-sunken) 0%, var(--surface-raised) 50%, var(--surface-sunken) 100%); background-size: 200% 100%; animation: brillo 1.2s ease-in-out infinite; }
+.esqueleto__bloque { border-radius: var(--radius-lg); }
+@keyframes brillo { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@keyframes aparecer { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .esqueleto, .esqueleto__linea, .esqueleto__bloque { animation: none; } }

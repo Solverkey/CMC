@@ -1,4 +1,4 @@
-import Link from 'next/link'
+import { Enlace as Link } from '@/components/Enlace'
 import { redirect } from 'next/navigation'
 import { FilaEnlace } from '@/components/FilaEnlace'
 import { tamano } from '@/lib/subidas'

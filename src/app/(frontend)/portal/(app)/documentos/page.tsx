@@ -1,4 +1,4 @@
-import Link from 'next/link'
+import { Enlace as Link } from '@/components/Enlace'
 import { Suspense } from 'react'
 import { BotonZip, MarcarTodos } from '@/components/BotonZip'
 import { EnviarCmc } from '@/components/EnviarCmc'

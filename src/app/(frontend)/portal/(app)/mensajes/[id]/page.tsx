@@ -1,4 +1,4 @@
-import Link from 'next/link'
+import { Enlace as Link } from '@/components/Enlace'
 import { notFound } from 'next/navigation'
 import { AdjuntoARevision } from '@/components/AdjuntoARevision'
 import { Actualizar } from '@/components/comunicacion/Actualizar'

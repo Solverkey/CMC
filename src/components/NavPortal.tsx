@@ -1,5 +1,5 @@
 'use client'
-import Link from 'next/link'
+import { Enlace as Link } from '@/components/Enlace'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import { Icon, type IconName } from './Icon'

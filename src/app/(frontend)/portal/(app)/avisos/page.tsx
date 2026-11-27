@@ -1,4 +1,4 @@
-import Link from 'next/link'
+import { Enlace as Link } from '@/components/Enlace'
 import { AvisoCorreo } from '@/components/AvisoCorreo'
 import { EmpresaSelector } from '@/components/EmpresaSelector'
 import { contexto, empresasDelUsuario, fmt, fmtHora } from '@/lib/payload'

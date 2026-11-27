@@ -1,4 +1,4 @@
-import Link from 'next/link'
+import { Enlace as Link } from '@/components/Enlace'
 import { Suspense } from 'react'
 import { listarHilos, noLeidos, ultimosMensajes } from '@/datos/consultas'
 import type { Empresa, User } from '@/datos/tipos'

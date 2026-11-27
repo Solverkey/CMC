@@ -1,4 +1,4 @@
-import Link from 'next/link'
+import { Enlace as Link } from '@/components/Enlace'
 import { Bandeja, consultaFiltros, type FiltrosComunicacion } from '@/components/comunicacion/Bandeja'
 import { Actualizar } from '@/components/comunicacion/Actualizar'
 import { Icon } from '@/components/Icon'
