@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { cookies } from 'next/headers'
 import { abrirSesion, cerrarSesion, usuarioPorSesion } from '@/datos/usuarios'
 import type { User } from '@/datos/tipos'
@@ -12,11 +13,11 @@ const opciones = (expira: Date) => ({
   expires: expira,
 })
 
-export async function leerSesion(): Promise<User | null> {
+export const leerSesion = cache(async function leerSesion(): Promise<User | null> {
   const token = (await cookies()).get(COOKIE)?.value
   if (!token) return null
   return usuarioPorSesion(token)
-}
+})
 
 export async function escribirSesion(userId: number) {
   const s = await abrirSesion(userId)

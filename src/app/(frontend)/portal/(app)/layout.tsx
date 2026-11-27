@@ -1,4 +1,4 @@
-import Link from 'next/link'
+import { Enlace as Link } from '@/components/Enlace'
 import { CerrarCalendario } from '@/components/CerrarCalendario'
 import { MenuPortal } from '@/components/MenuPortal'
 import { NavPortal, type Enlace } from '@/components/NavPortal'

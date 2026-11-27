@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import crypto from 'crypto'
 import { PLANTILLAS, type ClavePlantilla, type Plantilla } from './plantillas'
 import { ahora, bit, ejecutar, filas, num, uno } from './db'
@@ -28,7 +29,7 @@ export type Config = {
 const n = (v: unknown, d: number) => (typeof v === 'number' && !Number.isNaN(v) ? v : typeof v === 'string' && v !== '' && !Number.isNaN(Number(v)) ? Number(v) : d)
 
 /** Configuración de la plataforma con los valores por defecto del informe para lo que no se haya guardado. */
-export async function leerConfiguracion(): Promise<Config> {
+export const leerConfiguracion = cache(async function leerConfiguracion(): Promise<Config> {
   const g = ((await uno<Record<string, unknown>>('SELECT * FROM configuracion ORDER BY id LIMIT 1').catch(() => null)) ?? {}) as Record<string, unknown>
   const cats = g.id
     ? await filas<Record<string, unknown>>('SELECT * FROM configuracion_plantilla_categorias WHERE _parent_id = $1 ORDER BY _order', [g.id])
@@ -75,7 +76,7 @@ export async function leerConfiguracion(): Promise<Config> {
     },
     cruda: g,
   }
-}
+})
 
 export type GuardarConfig = {
   antelacionMeses: number

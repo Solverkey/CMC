@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import { Enlace as Link } from '@/components/Enlace'
 import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { LogoutButton } from './LogoutButton'

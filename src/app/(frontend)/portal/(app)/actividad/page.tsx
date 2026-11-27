@@ -1,4 +1,4 @@
-import Link from 'next/link'
+import { Enlace as Link } from '@/components/Enlace'
 import { notFound } from 'next/navigation'
 import { empresasDe } from '@/access'
 import { contar, filtroActividad, listarActividad } from '@/datos/consultas'

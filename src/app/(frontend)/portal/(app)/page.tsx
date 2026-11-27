@@ -1,4 +1,4 @@
-import Link from 'next/link'
+import { Enlace as Link } from '@/components/Enlace'
 import { AltaEmpresa } from '@/components/AltaEmpresa'
 import { AvisoCorreo } from '@/components/AvisoCorreo'
 import { FormAccion } from '@/components/FormAccion'

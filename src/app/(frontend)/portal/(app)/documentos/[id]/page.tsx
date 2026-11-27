@@ -1,4 +1,4 @@
-import Link from 'next/link'
+import { Enlace as Link } from '@/components/Enlace'
 import { notFound } from 'next/navigation'
 import { BotonDescarga } from '@/components/BotonDescarga'
 import { EditarDocumento } from '@/components/EditarDocumento'
