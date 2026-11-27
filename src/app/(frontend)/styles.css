@@ -548,3 +548,22 @@ img.visor { height: auto; max-height: 720px; object-fit: contain; }
 @keyframes brillo { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 @keyframes aparecer { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .esqueleto, .esqueleto__linea, .esqueleto__bloque { animation: none; } }
+
+/* Menú lateral del portal: fijo a la altura de la ventana; el contenido se desplaza por su cuenta. */
+@media (min-width: 900px) {
+  .portal { align-items: flex-start; }
+  .portal__side { position: sticky; top: 0; height: 100vh; height: 100dvh; overflow-y: auto; overscroll-behavior: contain; }
+}
+/* Pantallas bajas (portátiles): más compacto para que quepan todas las opciones sin desplazar. */
+@media (min-width: 900px) and (max-height: 820px) {
+  .portal__side { padding-block: var(--space-4); gap: var(--space-4); }
+  .portal__menu { gap: var(--space-4); }
+  .portal__side .wordmark img { height: 40px; }
+  .side-nav a { height: 38px; }
+  .perfil { padding-top: 8px; }
+  .perfil__boton { padding: 6px 8px; }
+}
+@media (min-width: 900px) and (max-height: 640px) {
+  .side-nav a { height: 34px; font-size: 13px; }
+  .portal__side .wordmark img { height: 34px; }
+}
