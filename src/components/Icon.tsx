@@ -30,6 +30,8 @@ const paths = {
   eye: (<><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></>),
   eyeOff: (<><path d="M3 3l18 18" /><path d="M10.5 6.2A11 11 0 0 1 12 6c6.5 0 10 6 10 6a18 18 0 0 1-3.4 4.2" /><path d="M6.2 6.2C3.6 8.1 2 12 2 12s3.5 7 10 7a10 10 0 0 0 4.2-.9" /><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" /></>),
   close: (<><path d="M6 6l12 12M18 6L6 18" /></>),
+  calendar: (<><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M4 10h16M9 3v4M15 3v4" /></>),
+  chevron: (<><path d="M6 9l6 6 6-6" /></>),
 } satisfies Record<string, React.ReactNode>
 
 export type IconName = keyof typeof paths
