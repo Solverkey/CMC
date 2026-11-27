@@ -581,3 +581,23 @@ img.visor { height: auto; max-height: 720px; object-fit: contain; }
 .buscador .desplegable { flex: 1 1 200px; }
 .buscador .desplegable .input { min-height: 40px; padding-block: 8px; font-size: 14px; }
 .bandeja__filtros .desplegable .input { min-height: 36px; padding-block: 6px; font-size: 14px; }
+
+/* Adjuntos de las conversaciones */
+.adjunto { display: flex; flex-direction: column; gap: 4px; padding: var(--space-2) var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-raised); font-size: 14px; }
+.adjunto__fila { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.adjunto__nombre { flex: 1 1 160px; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+.adjunto__estado { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 13px; line-height: 18px; }
+.adjunto__estado--ok { color: var(--status-ok); }
+.adjunto__estado--espera { color: var(--status-cond); }
+.adjunto__estado--mal { color: var(--status-expired); }
+.adjunto__estado a { font-weight: 600; }
+.adjunto--compacto .btn { height: 30px; padding: 0 8px; font-size: 13px; }
+.conv__archivos { position: relative; }
+.conv__archivos > summary { list-style: none; cursor: pointer; }
+.conv__archivos > summary::-webkit-details-marker { display: none; }
+.conv__archivos__caja { position: absolute; right: 0; top: calc(100% + 6px); z-index: 8; width: min(460px, 86vw); max-height: 60vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface-raised); box-shadow: var(--shadow-card); }
+.conv__gestion__doc { display: flex; align-items: center; gap: var(--space-2); min-width: 0; flex: 0 1 320px; }
+.conv__gestion__doc .desplegable { flex: 1 1 auto; min-width: 180px; }
+.burbuja .adjunto { margin-top: 6px; background: var(--surface); }
+.insignia { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: var(--radius-full); background: var(--status-cond); color: #fff; font-size: 12px; font-weight: 700; }
+.conv__gestion .desplegable__entrada { min-height: 36px; height: 36px; padding-block: 6px; font-size: 14px; }

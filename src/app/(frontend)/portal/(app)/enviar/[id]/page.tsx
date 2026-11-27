@@ -4,6 +4,7 @@ import { BotonDescarga } from '@/components/BotonDescarga'
 import { FormAccion } from '@/components/FormAccion'
 import { VisorArchivo } from '@/components/VisorArchivo'
 import { resolverEnvio } from '@/app/(frontend)/portal/acciones'
+import { conversacionDeEnvio } from '@/datos/adjuntos'
 import { categoriasDeEmpresa, envioPorId, listarDocumentos } from '@/datos/consultas'
 import type { Documento, Empresa } from '@/datos/tipos'
 import { contexto, fmt, idDe } from '@/lib/payload'
@@ -19,9 +20,10 @@ export default async function RevisarEnvio({ params }: { params: Promise<{ id: s
   const envio = await envioPorId(id, user)
   if (!envio) notFound()
   const empresaId = String(idDe(envio.empresa))
-  const [categorias, documentos] = await Promise.all([
+  const [categorias, documentos, conversacion] = await Promise.all([
     categoriasDeEmpresa(empresaId, { archivadas: false }),
     listarDocumentos(user, 'AND empresa_id = $1 ORDER BY titulo', [Number(empresaId)], 500),
+    conversacionDeEnvio(envio.id),
   ])
   const empresa = envio.empresa as Empresa
   const relacionado = envio.documentoRelacionado as Documento | null
@@ -40,6 +42,11 @@ export default async function RevisarEnvio({ params }: { params: Promise<{ id: s
             {envio.nuevaCaducidad ? ` · caducidad propuesta ${fmt(envio.nuevaCaducidad)}` : ''}
           </p>
           {envio.comentario && <p>{envio.comentario}</p>}
+          {conversacion && (
+            <p className="small">
+              Viene de un archivo de la conversación <Link href={`/portal/mensajes/${conversacion.hilo_id}`}>{conversacion.asunto}</Link>. Al publicarlo, quedará enlazado a ella.
+            </p>
+          )}
         </div>
       {!envio.url && <p className="muted">Este envío no tiene archivo.</p>}
       {envio.estado !== 'pendiente' ? (

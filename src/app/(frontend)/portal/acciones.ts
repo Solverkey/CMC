@@ -14,7 +14,7 @@ import { usuarioPorId } from '@/datos/usuarios'
 import { empresaPorId } from '@/datos/consultas'
 import { actualizarCategoria, actualizarDocumento, actualizarEmpresa, crearEmpresa, crearMedia, resolverEnvio as publicarEnvio } from '@/datos/operaciones'
 import { crearCatalogo, desactivarCatalogo, type Efecto } from '@/lib/catalogo'
-import { gestionarHilo as actualizarHilo } from '@/servicios/comunicacion'
+import { adjuntoADocumento, gestionarHilo as actualizarHilo, vincularDocumento } from '@/servicios/comunicacion'
 import type { Fichero } from '@/lib/subidas'
 
 export type Resultado = { ok?: string; error?: string; clave?: string } | null
@@ -321,5 +321,32 @@ export async function cambiarEquipo(_: Resultado, f: FormData): Promise<Resultad
     else if (accion === 'avisos-no') await cambiarEquipoCmc(req, campo(f, 'usuario'), { recibeAvisos: false })
     else throw new Error('Acción no válida.')
     return 'Equipo actualizado.'
+  })
+}
+
+export async function incorporarAdjunto(_: Resultado, f: FormData): Promise<Resultado> {
+  const { req } = await contexto()
+  try {
+    const r = await adjuntoADocumento(req, {
+      adjunto: campo(f, 'adjunto'),
+      documento: campo(f, 'documento'),
+      relacion: campo(f, 'relacion'),
+      nuevaCaducidad: fecha(f, 'nuevaCaducidad'),
+      nuevoAviso: fecha(f, 'nuevoAviso'),
+    })
+    revalidatePath(`/portal/documentos/${r.documento.id}`)
+    revalidatePath('/portal/mensajes', 'layout')
+    return { ok: `Añadido al documento «${r.documento.titulo}».` }
+  } catch (e) {
+    return { error: (e as Error).message || 'No se ha podido añadir.' }
+  }
+}
+
+export async function vincularDocumentoHilo(_: Resultado, f: FormData): Promise<Resultado> {
+  const { req } = await contexto()
+  return ejecutar(`/portal/mensajes/${campo(f, 'hilo')}`, async () => {
+    const documento = campo(f, 'documento')
+    await vincularDocumento(req, campo(f, 'hilo'), documento || null)
+    return documento ? 'Conversación vinculada al documento.' : 'Conversación desvinculada.'
   })
 }
