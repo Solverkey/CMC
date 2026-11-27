@@ -448,9 +448,6 @@ img.visor { height: auto; max-height: 720px; object-fit: contain; }
 .buscador__texto:focus-within { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 .buscador__texto input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font: 400 15px/22px var(--font-sans), sans-serif; color: var(--ink); }
 .buscador select.input { flex: 1 1 180px; width: auto; min-height: 40px; padding-block: 8px; font-size: 14px; }
-.buscador__fechas { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: var(--space-3); }
-.buscador__fechas label { display: flex; align-items: center; gap: 8px; }
-.buscador__fechas .input { width: auto; min-height: 36px; padding-block: 6px; }
 .seleccion { position: sticky; top: var(--space-2); z-index: 3; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-4); border-radius: var(--radius-lg); background: var(--slate-deep); color: var(--on-slate); box-shadow: var(--shadow-card); }
 .seleccion[hidden] { display: none; }
 .seleccion .btn--ghost { color: var(--on-slate); }
@@ -601,3 +598,56 @@ img.visor { height: auto; max-height: 720px; object-fit: contain; }
 .burbuja .adjunto { margin-top: 6px; background: var(--surface); }
 .insignia { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: var(--radius-full); background: var(--status-cond); color: #fff; font-size: 12px; font-weight: 700; }
 .conv__gestion .desplegable__entrada { min-height: 36px; height: 36px; padding-block: 6px; font-size: 14px; }
+
+/* Selector de rango de fechas */
+.rango { position: relative; display: flex; align-items: center; min-width: 0; }
+.buscador .rango { flex: 1.6 1 300px; }
+.rango__boton { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px; padding: 8px 12px; text-align: left; cursor: pointer; font-size: 14px; color: var(--ink); background: var(--surface-raised); }
+.rango__boton > svg:last-child { margin-left: auto; color: var(--ink-muted); flex: none; }
+.rango__boton > svg:first-child { color: var(--ink-muted); flex: none; }
+.rango__etiqueta { color: var(--ink-muted); flex: none; }
+.rango__valor { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rango__boton--activo { border-color: var(--slate); }
+.rango__boton--activo .rango__valor { font-weight: 600; }
+.rango__boton--activo { padding-right: 56px; }
+.rango__boton--activo > svg:last-child { display: none; }
+.rango__quitar { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: var(--radius-full); background: transparent; color: var(--ink-muted); cursor: pointer; }
+.rango__quitar:hover { background: var(--surface); color: var(--ink); }
+.rango__panel { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; display: flex; gap: var(--space-4); padding: var(--space-4); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface-raised); box-shadow: var(--shadow-card); }
+.rango__panel--derecha { left: auto; right: 0; }
+.rango__atajos { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0 var(--space-3) 0 0; list-style: none; border-right: 1px solid var(--line); min-width: 150px; }
+.rango__atajos button { width: 100%; padding: 8px 10px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); font-size: 14px; text-align: left; cursor: pointer; white-space: nowrap; }
+.rango__atajos button:hover { background: var(--surface); }
+.rango__atajos button[aria-pressed="true"] { background: var(--slate); color: var(--on-slate); font-weight: 600; }
+.rango__calendario { position: relative; display: flex; flex-direction: column; gap: var(--space-3); }
+.rango__nav { position: absolute; top: -4px; left: 0; right: 0; display: flex; justify-content: space-between; pointer-events: none; }
+.rango__flecha { pointer-events: auto; width: 32px; height: 32px; border: 0; border-radius: var(--radius-full); background: transparent; color: var(--ink); font-size: 22px; line-height: 1; cursor: pointer; }
+.rango__flecha:hover { background: var(--surface); }
+.rango__meses { display: flex; gap: var(--space-6); }
+.rango__mes { width: 252px; }
+.rango__titulo { margin: 0 0 8px; text-align: center; font-weight: 700; font-size: 15px; line-height: 24px; }
+.rango__semana { display: grid; grid-template-columns: repeat(7, 36px); }
+.rango__cab { display: grid; place-items: center; height: 28px; color: var(--ink-muted); font-size: 12px; font-weight: 600; }
+.rango__semana--dias > span { height: 36px; }
+.rango__dia { width: 100%; height: 36px; border: 0; background: transparent; color: var(--ink); font-size: 14px; cursor: pointer; border-radius: var(--radius-full); position: relative; }
+.rango__dia:hover { background: var(--surface); }
+.rango__dia--hoy { font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.rango__dia--dentro { border-radius: 0; background: color-mix(in srgb, var(--slate) 14%, transparent); }
+.rango__dia--dentro:hover { background: color-mix(in srgb, var(--slate) 24%, transparent); }
+.rango__dia--ini, .rango__dia--fin { background: var(--slate); color: var(--on-slate); font-weight: 700; }
+.rango__dia--ini:hover, .rango__dia--fin:hover { background: var(--slate); }
+.rango__dia--provisional { background: color-mix(in srgb, var(--slate) 55%, transparent); }
+.rango__dia:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; z-index: 1; }
+.rango__pie { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); padding-top: var(--space-3); border-top: 1px solid var(--line); }
+.rango__pie p { margin: 0; max-width: 320px; }
+@media (max-width: 760px) {
+  .rango__mes--segundo { display: none; }
+  .rango__panel { position: fixed; left: 8px; right: 8px; top: auto; bottom: 8px; flex-direction: column; max-height: calc(100dvh - 16px); overflow-y: auto; }
+  .rango__atajos { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--line); padding: 0 0 var(--space-2); min-width: 0; }
+  .rango__atajos li { flex: 0 0 auto; }
+  .rango__atajos button { padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--radius-full); }
+  .rango__mes { width: 100%; }
+  .rango__semana { grid-template-columns: repeat(7, 1fr); }
+}
+.rango__pie .btn { width: auto; }
+.field .rango__boton { min-height: 44px; font-size: 16px; }

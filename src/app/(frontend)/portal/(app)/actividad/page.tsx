@@ -6,6 +6,7 @@ import type { Empresa } from '@/datos/tipos'
 import { ACCIONES } from '@/lib/actividad'
 import { fechaValida } from '@/servicios/documentos'
 import { contexto, empresasDelUsuario, fmtHora } from '@/lib/payload'
+import { RangoFechas } from '@/components/RangoFechas'
 import { Desplegable } from '@/components/Desplegable'
 
 export const metadata = { title: 'Registro de actividad' }
@@ -75,8 +76,10 @@ export default async function ActividadPage({ searchParams }: { searchParams: Pr
           </select>
         </div>
         <div className="field"><label htmlFor="email">Usuario</label><input id="email" name="email" defaultValue={sp.email} placeholder="correo" /></div>
-        <div className="field"><label htmlFor="desde">Desde</label><input id="desde" name="desde" type="date" defaultValue={sp.desde} /></div>
-        <div className="field"><label htmlFor="hasta">Hasta</label><input id="hasta" name="hasta" type="date" defaultValue={sp.hasta} /></div>
+        <div className="field">
+          <label>Fechas</label>
+          <RangoFechas key={`${sp.desde ?? ''}-${sp.hasta ?? ''}`} etiqueta="Fechas" sinEtiquetaVisible atajos="pasado" desde={sp.desde} hasta={sp.hasta} nombres={{ desde: 'desde', hasta: 'hasta' }} />
+        </div>
         <button className="btn btn--secondary">Filtrar</button>
       </form>
 
