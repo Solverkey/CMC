@@ -2,6 +2,7 @@
 import { Enlace as Link } from '@/components/Enlace'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
+import { Desplegable } from '../Desplegable'
 
 type Props = { empresas: { id: string; nombre: string }[]; cmc: boolean }
 
@@ -49,10 +50,14 @@ export function FiltrosBandeja({ empresas, cmc }: Props) {
         }}
       />
       {empresas.length > 1 && (
-        <select className="input" aria-label="Empresa" value={sp.get('empresa') ?? ''} onChange={(e) => router.replace(con({ empresa: e.target.value || null }))}>
-          <option value="">Todas las empresas</option>
-          {empresas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
-        </select>
+        <Desplegable
+          key={`e${sp.get('empresa') ?? ''}`}
+          etiqueta="Empresa"
+          vacia="Todas las empresas"
+          opciones={empresas.map((e) => ({ valor: e.id, texto: e.nombre }))}
+          valor={sp.get('empresa') ?? ''}
+          alCambiar={(v) => router.replace(con({ empresa: v || null }))}
+        />
       )}
       <div className="row segmentado" role="group" aria-label="Estado">
         {ESTADOS.map((e) => (

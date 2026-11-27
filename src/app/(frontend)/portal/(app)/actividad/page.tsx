@@ -6,6 +6,7 @@ import type { Empresa } from '@/datos/tipos'
 import { ACCIONES } from '@/lib/actividad'
 import { fechaValida } from '@/servicios/documentos'
 import { contexto, empresasDelUsuario, fmtHora } from '@/lib/payload'
+import { Desplegable } from '@/components/Desplegable'
 
 export const metadata = { title: 'Registro de actividad' }
 
@@ -55,11 +56,8 @@ export default async function ActividadPage({ searchParams }: { searchParams: Pr
       <form className="card filtros" role="search">
         {(cmc || empresas.length > 1) && (
           <div className="field">
-            <label htmlFor="empresa">Empresa</label>
-            <select id="empresa" name="empresa" defaultValue={sp.empresa ?? ''}>
-              <option value="">Todas</option>
-              {empresas.map((e) => <option key={e.id} value={e.id}>{e.razonSocial}</option>)}
-            </select>
+            <label>Empresa</label>
+            <Desplegable name="empresa" etiqueta="Empresa" vacia="Todas" opciones={empresas.map((e) => ({ valor: String(e.id), texto: e.razonSocial }))} valor={sp.empresa ?? ''} />
           </div>
         )}
         <div className="field">

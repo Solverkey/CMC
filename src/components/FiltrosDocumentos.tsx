@@ -2,6 +2,7 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from './Icon'
+import { Desplegable } from './Desplegable'
 
 type Opcion = { id: string; nombre: string }
 type Props = { empresas: Opcion[]; categorias: Opcion[] | null; ordenes: { id: string; texto: string }[] }
@@ -45,16 +46,24 @@ export function FiltrosDocumentos({ empresas, categorias, ordenes }: Props) {
         />
       </div>
       {empresas.length > 1 && (
-        <select className="input" aria-label="Empresa" value={sp.get('empresa') ?? ''} onChange={(e) => ir({ empresa: e.target.value || null, categoria: null })}>
-          <option value="">Todas las empresas</option>
-          {empresas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
-        </select>
+        <Desplegable
+          key={`e${sp.get('empresa') ?? ''}`}
+          etiqueta="Empresa"
+          vacia="Todas las empresas"
+          opciones={empresas.map((e) => ({ valor: e.id, texto: e.nombre }))}
+          valor={sp.get('empresa') ?? ''}
+          alCambiar={(v) => ir({ empresa: v || null, categoria: null })}
+        />
       )}
       {categorias && categorias.length > 0 && (
-        <select className="input" aria-label="Instalación" value={sp.get('categoria') ?? ''} onChange={(e) => ir({ categoria: e.target.value || null })}>
-          <option value="">Todas las instalaciones</option>
-          {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-        </select>
+        <Desplegable
+          key={`c${sp.get('empresa') ?? ''}-${sp.get('categoria') ?? ''}`}
+          etiqueta="Instalación"
+          vacia="Todas las instalaciones"
+          opciones={categorias.map((c) => ({ valor: c.id, texto: c.nombre }))}
+          valor={sp.get('categoria') ?? ''}
+          alCambiar={(v) => ir({ categoria: v || null })}
+        />
       )}
       <select className="input" aria-label="Ordenar por" value={sp.get('orden') ?? 'urgencia'} onChange={(e) => ir({ orden: e.target.value === 'urgencia' ? null : e.target.value })}>
         {ordenes.map((o) => <option key={o.id} value={o.id}>Orden: {o.texto}</option>)}
