@@ -10,7 +10,8 @@ import { guardarFichero, leerFichero } from '@/lib/ficheros'
 import { crearPdf } from '@/lib/pdf'
 import { prepararFichero, type Fichero } from '@/lib/subidas'
 import { categoriaPorId, documentoPorId, empresaVisible, hiloPorId, marcarLeido, mensajesDeHilo } from '@/datos/consultas'
-import { crearEnvio } from '@/datos/operaciones'
+import { crearArchivo, crearEnvio } from '@/datos/operaciones'
+import { anotarDestino, destinosDeAdjuntos, hiloDeAdjunto } from '@/datos/adjuntos'
 import { usuarioPorId } from '@/datos/usuarios'
 import { mapAdjunto } from '@/datos/mapas'
 import type { Adjunto, User } from '@/datos/tipos'
@@ -105,24 +106,82 @@ export async function gestionarHilo(req: Ctx, id: number | string, data: { estad
   return hiloPorId(id)
 }
 
-export async function adjuntoAEnvio(req: Ctx, d: { adjunto: string | number; titulo?: string; documentoRelacionado?: string | number | null; relacion?: string; nuevaCaducidad?: string | null }) {
-  const row = await uno<Record<string, unknown>>('SELECT * FROM adjuntos WHERE id = $1', [Number(d.adjunto)])
+/** Adjunto visible para el usuario, con la conversación en la que está. */
+async function adjuntoConHilo(req: Ctx, id: string | number) {
+  const row = await uno<Record<string, unknown>>('SELECT * FROM adjuntos WHERE id = $1', [Number(id)])
   if (!row) throw new AppError('Adjunto no encontrado.', 404)
   const adj = mapAdjunto(row) as Adjunto
   if (!puedeVerEmpresa(req.user, adj.empresa as number)) throw new AppError('No tiene acceso.', 403)
+  const hilo = await hiloDeAdjunto(adj.id)
+  return { adj, hilo }
+}
+
+/** El cliente manda un adjunto a la bandeja de revisión de CMC. Queda enlazado a la conversación y no se puede mandar dos veces. */
+export async function adjuntoAEnvio(req: Ctx, d: { adjunto: string | number; titulo?: string; documentoRelacionado?: string | number | null; relacion?: string; nuevaCaducidad?: string | null }) {
+  const { adj, hilo } = await adjuntoConHilo(req, d.adjunto)
+  const previo = (await destinosDeAdjuntos([adj.id])).get(adj.id)
+  if (previo?.archivo) throw new AppError(`Este archivo ya está en el documento «${previo.archivo.documentoTitulo}».`, 400)
+  if (previo?.envio && previo.envio.estado !== 'rechazado') throw new AppError('Este archivo ya está enviado a revisión.', 400)
+  const documento = d.documentoRelacionado ?? hilo?.documento_id ?? null
   const data = await leerFichero('adjuntos', adj)
-  return crearEnvio(
+  const envio = await crearEnvio(
     req,
     {
       titulo: d.titulo?.trim() || adj.filename!,
       empresa: Number(idDe(adj.empresa)),
-      documentoRelacionado: d.documentoRelacionado ? Number(d.documentoRelacionado) : undefined,
-      relacion: d.relacion || (d.documentoRelacionado ? 'Renovación' : 'Original'),
+      documentoRelacionado: documento ? Number(documento) : undefined,
+      relacion: d.relacion || (documento ? 'Renovación' : 'Original'),
       nuevaCaducidad: d.nuevaCaducidad || undefined,
-      comentario: 'Enviado desde un adjunto de Comunicación',
+      comentario: hilo ? `Enviado desde la conversación «${hilo.asunto}»` : 'Enviado desde un adjunto de Comunicación',
     },
     { data, name: adj.filename!, mimetype: adj.mimeType ?? 'application/octet-stream', size: data.length },
   )
+  if (envio) await anotarDestino({ adjunto: adj.id, hilo: hilo?.hilo_id, envio: envio.id, usuario: Number(req.user?.id) })
+  return envio
+}
+
+/**
+ * CMC añade un adjunto de una conversación como archivo de un documento (renovación, anexo, subsanación…).
+ * Queda enlazado al adjunto, la conversación pasa a estar sobre ese documento si no lo estaba,
+ * y se deja constancia con un mensaje en la conversación.
+ */
+export async function adjuntoADocumento(req: Ctx, d: { adjunto: string | number; documento: string | number; relacion: string; nuevaCaducidad?: string | null; nuevoAviso?: string | null }) {
+  if (!esSuperAdmin(req.user)) throw new AppError('Solo CMC puede añadir archivos a un documento.', 403)
+  const { adj, hilo } = await adjuntoConHilo(req, d.adjunto)
+  const doc = await documentoPorId(d.documento, req.user)
+  if (!doc) throw new AppError('Documento no encontrado.', 404)
+  if (String(idDe(doc.empresa)) !== String(idDe(adj.empresa))) throw new AppError('El documento es de otra empresa.', 400)
+  const previo = (await destinosDeAdjuntos([adj.id])).get(adj.id)
+  if (previo?.archivo) throw new AppError(`Este archivo ya está en el documento «${previo.archivo.documentoTitulo}».`, 400)
+  const relacion = d.relacion?.trim() || 'Anexo'
+  const data = await leerFichero('adjuntos', adj)
+  const archivo = await crearArchivo(
+    req,
+    { documento: doc.id, relacion, nuevaCaducidad: d.nuevaCaducidad || null, nuevoAviso: d.nuevoAviso || null, comentario: hilo ? `Desde la conversación «${hilo.asunto}»` : 'Desde un adjunto de Comunicación' },
+    { data, name: adj.filename!, mimetype: adj.mimeType ?? 'application/octet-stream', size: data.length },
+  )
+  if (!archivo) throw new AppError('No se ha podido añadir el archivo.', 500)
+  await anotarDestino({ adjunto: adj.id, hilo: hilo?.hilo_id, archivo: archivo.id, usuario: Number(req.user?.id) })
+  if (hilo) {
+    if (!hilo.documento_id) await ejecutar('UPDATE hilos SET documento_id = $2, updated_at = $3 WHERE id = $1', [hilo.hilo_id, doc.id, ahora()])
+    await escribirMensaje(req, { hilo: hilo.hilo_id, texto: `He añadido «${adj.filename}» al documento «${doc.titulo}» como ${relacion}.` })
+  }
+  return { archivo, documento: doc }
+}
+
+/** CMC vincula una conversación a un documento de su empresa (o la desvincula). */
+export async function vincularDocumento(req: Ctx, hiloId: string | number, documento: string | number | null) {
+  if (!esSuperAdmin(req.user)) throw new AppError('Solo CMC puede vincular conversaciones.', 403)
+  const hilo = await hiloPorId(hiloId)
+  if (!hilo) throw new AppError('Conversación no encontrada.', 404)
+  let titulo = ''
+  if (documento) {
+    const doc = await documentoPorId(documento)
+    if (!doc || String(idDe(doc.empresa)) !== String(idDe(hilo.empresa))) throw new AppError('Ese documento no es de la empresa de la conversación.', 400)
+    titulo = doc.titulo
+  }
+  await ejecutar('UPDATE hilos SET documento_id = $2, updated_at = $3 WHERE id = $1', [hilo.id, documento ? Number(documento) : null, ahora()])
+  await registrar(req, { accion: 'edicion', descripcion: documento ? `Conversación «${hilo.asunto}» vinculada al documento «${titulo}»` : `Conversación «${hilo.asunto}» desvinculada de su documento`, empresa: idDe(hilo.empresa), coleccion: 'hilos', registroId: hilo.id })
 }
 
 export async function exportarHistorial(req: Ctx, d: { empresa: string | number; documento?: string | number | null }) {

@@ -11,6 +11,7 @@ import { destinatariosCliente, destinatariosCMC, tecnicoResponsable, usuariosEmp
 import { ESTADOS, calcularEstado, resolverGestion, restarMeses, type Estado } from '@/lib/estado'
 import { guardarFichero, leerFichero } from '@/lib/ficheros'
 import { prepararFichero, tamano, type Fichero } from '@/lib/subidas'
+import { enlazarArchivoDeEnvio } from './adjuntos'
 import { archivoPorId, categoriaPorId, documentoPorId, empresaPorId, envioPorId } from './consultas'
 import type { Documento, Empresa } from './tipos'
 
@@ -342,12 +343,14 @@ export async function resolverEnvio(
     const caducidad = data.documentoDestino ? fresco.fechaCaducidad || fresco.nuevaCaducidad : undefined
     const binario = await leerFichero('envios', fresco)
     ctx.context.sinComprimir = true
-    await crearArchivo(
+    const publicado = await crearArchivo(
       ctx,
       { documento: destino, relacion, nuevaCaducidad: caducidad, nuevoAviso: data.documentoDestino ? fresco.fechaAviso : undefined, comentario: `Publicado desde el envío «${fresco.titulo}»${fresco.comentario ? `: ${fresco.comentario}` : ''}` },
       { data: binario, name: fresco.filename || 'archivo', mimetype: fresco.mimeType || 'application/octet-stream', size: binario.length },
       { sinComprimir: true },
     )
+    // Si el envío salió de un adjunto de una conversación, el archivo publicado queda enlazado a ella.
+    if (publicado) await enlazarArchivoDeEnvio(Number(id), Number(publicado.id))
   }
   const empresa = await empresaPorId(empresaId)
   const autorId = idDe(envio.enviadoPor)

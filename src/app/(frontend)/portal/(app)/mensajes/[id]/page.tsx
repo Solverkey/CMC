@@ -1,6 +1,6 @@
 import { Enlace as Link } from '@/components/Enlace'
 import { notFound } from 'next/navigation'
-import { AdjuntoARevision } from '@/components/AdjuntoARevision'
+import { AdjuntoConversacion } from '@/components/comunicacion/AdjuntoConversacion'
 import { Actualizar } from '@/components/comunicacion/Actualizar'
 import { Bandeja, consultaFiltros, type FiltrosComunicacion } from '@/components/comunicacion/Bandeja'
 import { GestionConversacion } from '@/components/comunicacion/GestionConversacion'
@@ -8,7 +8,8 @@ import { ScrollAlFinal } from '@/components/comunicacion/ScrollAlFinal'
 import { Icon } from '@/components/Icon'
 import { MensajeForm } from '@/components/MensajeForm'
 import { tamano } from '@/lib/subidas'
-import { hiloPorId, marcarLeido, mensajesDeHilo, usuariosCms } from '@/datos/consultas'
+import { destinosDeAdjuntos } from '@/datos/adjuntos'
+import { hiloPorId, listarDocumentos, marcarLeido, mensajesDeHilo, usuariosCms } from '@/datos/consultas'
 import type { Adjunto, Empresa, User } from '@/datos/tipos'
 import { contexto, idDe } from '@/lib/payload'
 
@@ -33,7 +34,28 @@ export default async function ConversacionPage({ params, searchParams }: { param
   const empresa = hilo.empresa as Empresa
   const doc = typeof hilo.documento === 'object' && hilo.documento ? hilo.documento : null
   const categoria = !doc && typeof hilo.categoria === 'object' && hilo.categoria ? hilo.categoria : null
-  const [mensajes, tecnicos] = await Promise.all([mensajesDeHilo(hilo.id), cmc ? usuariosCms() : null])
+  const [mensajes, tecnicos, docsEmpresa] = await Promise.all([
+    mensajesDeHilo(hilo.id),
+    cmc ? usuariosCms() : null,
+    cmc ? listarDocumentos(user, 'AND empresa_id = $1 ORDER BY titulo', [empresa.id]) : [],
+  ])
+  // Todos los archivos de la conversación y qué se ha hecho con cada uno (enviado a revisión, añadido a un documento).
+  const archivos = mensajes.flatMap((m) => (m.adjuntos ?? []).filter((a): a is Adjunto => typeof a === 'object' && a !== null).map((a) => ({ adjunto: a, mensaje: m })))
+  const destinos = await destinosDeAdjuntos(archivos.map((x) => x.adjunto.id))
+  const documentos = docsEmpresa.map((d) => ({ id: String(d.id), titulo: d.titulo }))
+  const documentoConversacion = doc ? String(doc.id) : undefined
+  const tarjeta = (adj: Adjunto, compacto?: boolean) => (
+    <AdjuntoConversacion
+      key={adj.id}
+      adjunto={{ id: Number(adj.id), filename: adj.filename ?? 'archivo', url: adj.url ?? null, tamano: tamano(adj.filesize) }}
+      destino={destinos.get(Number(adj.id))}
+      cmc={cmc}
+      documentos={documentos}
+      documentoConversacion={documentoConversacion}
+      compacto={compacto}
+    />
+  )
+  const pendientes = archivos.filter((x) => !destinos.get(Number(x.adjunto.id))?.archivo).length
   const resuelta = hilo.estado === 'resuelto'
   const asignado = (hilo.asignado as User | null)?.nombre
 
@@ -56,12 +78,25 @@ export default async function ConversacionPage({ params, searchParams }: { param
             {!cmc && <span className="muted">{asignado ? `La atiende ${asignado} (CMC)` : 'Pendiente de asignar en CMC'}</span>}
           </div>
         </div>
+        {archivos.length > 0 && (
+          <details className="conv__archivos">
+            <summary className="btn btn--ghost btn--sm">
+              <Icon name="paperclip" />Archivos ({archivos.length}){cmc && pendientes > 0 ? <span className="insignia" title="Sin añadir a un documento">{pendientes} sin archivar</span> : null}
+            </summary>
+            <div className="conv__archivos__caja">
+              <p className="small muted" style={{ margin: 0 }}>
+                {cmc ? 'Añada cada archivo al documento que corresponda; quedará en su histórico.' : 'Archivos compartidos en esta conversación y en qué ha quedado cada uno.'}
+              </p>
+              {archivos.map((x) => tarjeta(x.adjunto, true))}
+            </div>
+          </details>
+        )}
         <a className="btn btn--ghost btn--sm" href={`/api/comunicaciones/${empresa.id}${doc ? `?documento=${doc.id}` : ''}`} title={doc ? 'Historial de comunicaciones de este documento' : `Historial de comunicaciones de ${empresa.razonSocial}`}>
           <Icon name="download" />Exportar PDF
         </a>
       </header>
 
-      {cmc && tecnicos && <GestionConversacion key={`${hilo.estado}-${idDe(hilo.asignado)}`} hilo={String(hilo.id)} estado={resuelta ? 'resuelto' : 'abierto'} asignado={idDe(hilo.asignado)} tecnicos={tecnicos} />}
+      {cmc && tecnicos && <GestionConversacion key={`${hilo.estado}-${idDe(hilo.asignado)}-${doc?.id ?? ''}`} hilo={String(hilo.id)} estado={resuelta ? 'resuelto' : 'abierto'} asignado={idDe(hilo.asignado)} tecnicos={tecnicos} documentos={documentos} documento={documentoConversacion ?? ''} />}
 
       <div className="conv__mensajes" aria-live="polite">
         {mensajes.length === 0 && <p className="muted small" style={{ textAlign: 'center' }}>Esta conversación aún no tiene mensajes.</p>}
@@ -81,18 +116,7 @@ export default async function ConversacionPage({ params, searchParams }: { param
                   <time dateTime={m.createdAt}>{hora(m.createdAt)}</time>
                 </header>
                 <p className="burbuja__texto">{m.texto}</p>
-                {(m.adjuntos ?? []).map((a) => {
-                  if (typeof a !== 'object') return null
-                  const adj = a as Adjunto
-                  return (
-                    <div key={adj.id} className="file">
-                      <Icon name="paperclip" />
-                      <a className="file__name" href={adj.url ?? '#'} target="_blank" rel="noreferrer">{adj.filename}</a>
-                      <span className="muted">{tamano(adj.filesize)}</span>
-                      <AdjuntoARevision adjunto={String(adj.id)} documento={doc ? String(doc.id) : undefined} />
-                    </div>
-                  )
-                })}
+                {(m.adjuntos ?? []).map((a) => (typeof a === 'object' && a ? tarjeta(a as Adjunto) : null))}
               </article>
             </div>
           )

@@ -4,12 +4,14 @@ import { BotonDescarga } from '@/components/BotonDescarga'
 import { EditarDocumento } from '@/components/EditarDocumento'
 import { EnviarCmc } from '@/components/EnviarCmc'
 import { VisorArchivo } from '@/components/VisorArchivo'
+import { AdjuntoConversacion } from '@/components/comunicacion/AdjuntoConversacion'
 import { Icon } from '@/components/Icon'
 import { SubirDocumento } from '@/components/SubirDocumento'
 import { ESTADOS, resolverGestion, type Estado } from '@/lib/estado'
 import { leerConfiguracion } from '@/lib/configuracion'
 import { plazo } from '@/lib/plazo'
 import { tamano } from '@/lib/subidas'
+import { adjuntosDeDocumento, conversacionesDeArchivos, destinosDeAdjuntos } from '@/datos/adjuntos'
 import { archivosDeDocumento, categoriasDeEmpresa, documentoPorId, listarHilos } from '@/datos/consultas'
 import type { Archivo, Categoria, Documento, Empresa, User } from '@/datos/tipos'
 import { contexto, diasHasta, fmt, fmtHora, idDe } from '@/lib/payload'
@@ -56,12 +58,15 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
 
   const empresa = doc.empresa as Empresa
   const categoria = doc.categoria as Categoria
-  const [archivos, hilos, categorias, cfg] = await Promise.all([
+  const [archivos, hilos, categorias, cfg, adjuntos] = await Promise.all([
     archivosDeDocumento(doc.id),
     listarHilos(user, 'AND documento_id = $1 ORDER BY ultimo_mensaje DESC LIMIT 50', [doc.id]),
     categoriasDeEmpresa(empresa.id, { archivadas: false }),
     leerConfiguracion(),
+    adjuntosDeDocumento(doc.id),
   ])
+  // Archivos compartidos en las conversaciones del documento y, al revés, de qué conversación salió cada archivo.
+  const [destinos, origenes] = await Promise.all([destinosDeAdjuntos(adjuntos.map((a) => a.id)), conversacionesDeArchivos(archivos.map((a) => a.id))])
   const vigenteId = idDe(doc.archivoVigente)
   const vigente = archivos.find((a) => String(a.id) === vigenteId) ?? archivos.find((a) => !a.historico && a.efectos?.includes('sustituye'))
   const gestionado = resolverGestion(empresa?.gestion, categoria?.gestion, doc.gestion) === 'gestionado'
@@ -229,6 +234,30 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
             <Link className="btn btn--ghost btn--sm" href={`/portal/mensajes/nuevo?empresa=${empresa.id}&documento=${doc.id}`}><Icon name="chat" />Nueva conversación</Link>
           </section>
 
+          {adjuntos.length > 0 && (
+            <section className="card stack" style={{ gap: 12 }} aria-labelledby="adjuntos-conv">
+              <div className="stack" style={{ gap: 2 }}>
+                <h2 className="ficha__h2" id="adjuntos-conv">Archivos en las conversaciones</h2>
+                <p className="small muted">
+                  {cmc ? 'Compartidos en las conversaciones sobre este documento. Añádalos al documento si corresponde.' : 'Compartidos en las conversaciones sobre este documento.'}
+                </p>
+              </div>
+              {adjuntos.map((a) => (
+                <AdjuntoConversacion
+                  key={a.id}
+                  compacto
+                  adjunto={{ id: a.id, filename: a.filename, url: a.url, tamano: tamano(a.filesize) }}
+                  destino={destinos.get(a.id)}
+                  cmc={cmc}
+                  documentos={[{ id: String(doc.id), titulo: doc.titulo }]}
+                  documentoConversacion={String(doc.id)}
+                  enDocumento={String(doc.id)}
+                  conversacion={{ id: a.hiloId, asunto: a.asunto }}
+                />
+              ))}
+            </section>
+          )}
+
           <section className="card stack" style={{ gap: 12 }}>
             <h2 className="ficha__h2">Histórico de archivos</h2>
             <ol className="timeline">
@@ -243,6 +272,9 @@ export default async function DocumentoPage({ params }: { params: Promise<{ id: 
                       <span className="muted">{fmt(a.createdAt)}{typeof a.subidoPor === 'object' && a.subidoPor ? ` · ${a.subidoPor.nombre}` : ''}</span>
                       {a.url && <a href={a.url} target="_blank" rel="noreferrer">{a.filename}</a>}
                       {a.comentario && <span className="muted">{a.comentario}</span>}
+                      {origenes.get(Number(a.id)) && (
+                        <Link className="small" href={`/portal/mensajes/${origenes.get(Number(a.id))!.hiloId}`}><Icon name="chat" size={12} /> Ver la conversación</Link>
+                      )}
                     </div>
                   </li>
                 )
