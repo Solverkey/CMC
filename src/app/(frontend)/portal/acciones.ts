@@ -9,7 +9,7 @@ import { restarMeses } from '@/lib/estado'
 import { PLANTILLAS, type ClavePlantilla } from '@/lib/plantillas'
 import { guardarConfiguracion as persistirConfig } from '@/lib/configuracion'
 import { crearClave, revocarClave as borrarClave } from '@/mcp/claves'
-import { cambiarRol, enviarInvitacion, invitarUsuario, quitarAcceso } from '@/servicios/usuarios'
+import { cambiarEquipoCmc, cambiarRol, enviarInvitacion, invitarCmc, invitarUsuario, quitarAcceso } from '@/servicios/usuarios'
 import { usuarioPorId } from '@/datos/usuarios'
 import { empresaPorId } from '@/datos/consultas'
 import { actualizarCategoria, actualizarDocumento, actualizarEmpresa, crearEmpresa, crearMedia, resolverEnvio as publicarEnvio } from '@/datos/operaciones'
@@ -300,5 +300,26 @@ export async function revocarClave(_: Resultado, f: FormData): Promise<Resultado
   return ejecutar('/portal/asistentes', async () => {
     await borrarClave(req, campo(f, 'id'))
     return 'Acceso revocado.'
+  })
+}
+
+export async function invitarEquipo(_: Resultado, f: FormData): Promise<Resultado> {
+  const { req } = await contexto()
+  return ejecutar('/portal/usuarios', async () => {
+    await invitarCmc(req, { email: campo(f, 'email'), nombre: campo(f, 'nombre') || undefined })
+    return `Invitación enviada a ${campo(f, 'email')}. Al entrar tendrá que activar el doble factor.`
+  })
+}
+
+export async function cambiarEquipo(_: Resultado, f: FormData): Promise<Resultado> {
+  const { req } = await contexto()
+  return ejecutar('/portal/usuarios', async () => {
+    const accion = campo(f, 'accion')
+    if (accion === 'desactivar') await cambiarEquipoCmc(req, campo(f, 'usuario'), { activo: false })
+    else if (accion === 'activar') await cambiarEquipoCmc(req, campo(f, 'usuario'), { activo: true })
+    else if (accion === 'avisos-si') await cambiarEquipoCmc(req, campo(f, 'usuario'), { recibeAvisos: true })
+    else if (accion === 'avisos-no') await cambiarEquipoCmc(req, campo(f, 'usuario'), { recibeAvisos: false })
+    else throw new Error('Acción no válida.')
+    return 'Equipo actualizado.'
   })
 }

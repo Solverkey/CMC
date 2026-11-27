@@ -207,3 +207,71 @@ export async function cambiarPassword(req: Ctx, sesionActual: string | null, act
   await cerrarOtrasSesiones(u.id, sesionActual)
   await registrar(req, { accion: 'seguridad', descripcion: `${u.email} ha cambiado su contraseña (se han cerrado sus otras sesiones)`, coleccion: 'users', registroId: u.id })
 }
+
+// ——— Equipo de CMC (super administradores) ———
+
+const soloCmc = (req: Ctx) => {
+  if (!esSuperAdmin(req.user)) throw new AppError('Solo CMC puede gestionar su equipo.', 403)
+}
+
+/** Personas de CMC con su estado, doble factor, si reciben avisos y su último acceso. */
+export async function equipoCmc(req: Ctx) {
+  soloCmc(req)
+  const rows = await filas<Record<string, unknown>>(
+    `SELECT u.id, u.nombre, u.email, u.activo, u.totp_activo, u.recibe_avisos, u.invitacion_hash,
+            (SELECT MAX(a.created_at) FROM actividad a WHERE a.usuario_id = u.id AND a.accion = 'login') AS ultimo
+       FROM users u WHERE u.rol = 'superadmin' ORDER BY u.nombre`,
+  )
+  const si = (v: unknown) => v === true || v === 1 || v === '1' || v === 'true'
+  return rows.map((r) => ({
+    id: Number(r.id),
+    nombre: String(r.nombre ?? ''),
+    email: String(r.email ?? ''),
+    activo: r.activo == null ? true : si(r.activo),
+    dobleFactor: si(r.totp_activo),
+    recibeAvisos: si(r.recibe_avisos),
+    pendiente: Boolean(r.invitacion_hash),
+    ultimoAcceso: r.ultimo ? String(r.ultimo) : null,
+  }))
+}
+
+/** Invita a una persona nueva al equipo de CMC. Al entrar tendrá que activar el doble factor. */
+export async function invitarCmc(req: Ctx, { email, nombre }: { email: string; nombre?: string }) {
+  soloCmc(req)
+  const limpio = email.trim().toLowerCase()
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(limpio)) throw new AppError('Email no válido.', 400)
+  if (await usuarioPorEmail(limpio, true)) throw new AppError('Ya existe una cuenta con ese email. Una cuenta de cliente no puede ser también de CMC.', 400)
+  const provisional = await import('@/lib/clave').then((m) => m.crearHashPassword(tokenAleatorio(24)))
+  const creado = await uno<{ id: number }>(
+    `INSERT INTO users (nombre, rol, email, hash, salt, activo, recibe_avisos, updated_at, created_at) VALUES ($1,'superadmin',$2,$3,$4,$5,$6,$7,$7) RETURNING id`,
+    [nombre?.trim() || limpio, limpio, provisional.hash, provisional.salt, bit(true), bit(true), ahora()],
+  )
+  const usuario = (await usuarioPorId(creado!.id))!
+  await registrar(req, { accion: 'permisos', descripcion: `Alta de ${limpio} en el equipo de CMC`, coleccion: 'users', registroId: usuario.id })
+  await enviarInvitacion(req, usuario, null)
+  return usuario
+}
+
+/** Activa o desactiva a una persona de CMC, o decide si recibe los avisos internos. Nunca a uno mismo ni al último activo. */
+export async function cambiarEquipoCmc(req: Ctx, id: number | string, cambios: { activo?: boolean; recibeAvisos?: boolean }) {
+  soloCmc(req)
+  const u = await usuarioPorId(id, true)
+  if (!u || u.rol !== 'superadmin') throw new AppError('Esa persona no es del equipo de CMC.', 404)
+  if (cambios.activo === false) {
+    if (String(u.id) === String(req.user!.id)) throw new AppError('No puede desactivar su propia cuenta.', 400)
+    const activos = await filas<{ id: number }>(`SELECT id FROM users WHERE rol = 'superadmin' AND (activo IS NULL OR activo IS NOT FALSE) AND id <> $1`, [u.id])
+    if (!activos.length) throw new AppError('Debe quedar al menos una persona activa en CMC.', 400)
+    await ejecutar('UPDATE users SET activo = $2, updated_at = $3 WHERE id = $1', [u.id, bit(false), ahora()])
+    // Fuera: sus sesiones y sus accesos de IA dejan de valer.
+    await cerrarOtrasSesiones(u.id)
+    await ejecutar('DELETE FROM payload_mcp_api_keys WHERE user_id = $1', [u.id])
+    await registrar(req, { accion: 'baja', descripcion: `${u.email} desactivado del equipo de CMC (sesiones y accesos de IA cerrados)`, coleccion: 'users', registroId: u.id })
+  } else if (cambios.activo === true) {
+    await ejecutar('UPDATE users SET activo = $2, updated_at = $3 WHERE id = $1', [u.id, bit(true), ahora()])
+    await registrar(req, { accion: 'alta', descripcion: `${u.email} reactivado en el equipo de CMC`, coleccion: 'users', registroId: u.id })
+  }
+  if (cambios.recibeAvisos !== undefined) {
+    await ejecutar('UPDATE users SET recibe_avisos = $2, updated_at = $3 WHERE id = $1', [u.id, bit(cambios.recibeAvisos), ahora()])
+    await registrar(req, { accion: 'edicion', descripcion: `${u.email} ${cambios.recibeAvisos ? 'recibe' : 'deja de recibir'} los avisos internos de CMC`, coleccion: 'users', registroId: u.id })
+  }
+}

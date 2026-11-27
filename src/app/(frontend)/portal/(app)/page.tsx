@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { AltaEmpresa } from '@/components/AltaEmpresa'
+import { AvisoCorreo } from '@/components/AvisoCorreo'
 import { FormAccion } from '@/components/FormAccion'
 import { Icon } from '@/components/Icon'
 import { StatusBadge } from '@/components/StatusBadge'
@@ -40,20 +41,46 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
   ])
   const visibles = cmc ? VISIBLES : VISIBLES.filter((e) => e !== 'azul')
   const cuenta = (e: Estado, de = lista) => de.filter((d) => d.estado === e).length
+  // Lo vencido y lo que vence en el plazo, de lo más urgente a lo menos.
   const proximos = lista.filter((d) => d.estado !== 'azul' && d.estado !== 'negro' && d.fechaCaducidad && new Date(d.fechaCaducidad) <= limite)
   const qs = (p: number) => `?empresa=${empresa.id}&plazo=${p}`
+  const [envios, hilos] = cmc
+    ? await Promise.all([
+        consultar<{ n: number }>(`SELECT COUNT(*) AS n FROM envios WHERE estado = 'pendiente' AND empresa_id = $1`, [empresa.id]),
+        consultar<{ n: number }>(`SELECT COUNT(*) AS n FROM hilos WHERE estado = 'abierto' AND empresa_id = $1`, [empresa.id]),
+      ]).then(([a, b]) => [Number(a[0]?.n ?? 0), Number(b[0]?.n ?? 0)])
+    : [0, 0]
+  const tecnico = empresa.tecnico && typeof empresa.tecnico === 'object' ? (empresa.tecnico as User).nombre : null
 
   return (
     <>
+      {cmc && <AvisoCorreo />}
       {(cmc || empresas.length > 1) && <Link href="/portal" className="small">← Todas las empresas</Link>}
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-end', gap: 16 }}>
         <div className="stack" style={{ gap: 4 }}>
-          <p className="small muted">{empresa.razonSocial}</p>
-          <h1>Estado de su documentación</h1>
+          {cmc ? (
+            <>
+              <p className="small muted">CIF {empresa.cif}{empresa.sector ? ` · ${empresa.sector}` : ''}{tecnico ? ` · Técnico: ${tecnico}` : ''}</p>
+              <h1>{empresa.razonSocial}</h1>
+            </>
+          ) : (
+            <>
+              <p className="small muted">{empresa.razonSocial}</p>
+              <h1>Estado de su documentación</h1>
+            </>
+          )}
+          {cmc && (
+            <nav className="row small" style={{ gap: 16 }} aria-label="Accesos de la empresa">
+              <Link href={`/portal/documentos?empresa=${empresa.id}`}>{lista.length} documentos</Link>
+              <Link href={`/portal/enviar?empresa=${empresa.id}`}>{envios} {envios === 1 ? 'envío pendiente' : 'envíos pendientes'}</Link>
+              <Link href={`/portal/mensajes?empresa=${empresa.id}`}>{hilos} {hilos === 1 ? 'conversación abierta' : 'conversaciones abiertas'}</Link>
+              <Link href={`/portal/usuarios?empresa=${empresa.id}`}>Usuarios</Link>
+            </nav>
+          )}
         </div>
         <div className="row">
-          <a href={`/api/inventario/${empresa.id}?formato=xlsx`} className="btn btn--secondary btn--sm"><Icon name="download" />Inventario Excel</a>
-          <a href={`/api/inventario/${empresa.id}?formato=pdf`} className="btn btn--secondary btn--sm"><Icon name="download" />Inventario PDF</a>
+          <a href={`/api/inventario/${empresa.id}?formato=xlsx`} className="btn btn--secondary btn--sm"><Icon name="download" />Excel</a>
+          <a href={`/api/inventario/${empresa.id}?formato=pdf`} className="btn btn--secondary btn--sm"><Icon name="download" />PDF</a>
           {cmc ? (
             <SubirDocumento
               empresaId={String(empresa.id)}
@@ -76,60 +103,74 @@ export default async function PanelPage({ searchParams }: { searchParams: Promis
         ))}
       </section>
 
-      <div className="row" style={{ gap: 24, alignItems: 'flex-start' }}>
-        <section className="stack" style={{ flex: '999 1 560px', minWidth: 0 }}>
-          <div className="row" style={{ justifyContent: 'space-between' }}>
-            <h2 style={{ fontSize: 22, lineHeight: '28px' }}>Próximos vencimientos</h2>
-            <nav aria-label="Plazo" className="row segmentado">
-              {PLAZOS.map((p) => (
-                <Link key={p} href={qs(p)} aria-current={p === plazo ? 'true' : undefined} className="btn btn--sm">{p} días</Link>
-              ))}
-            </nav>
-          </div>
-          <TablaDocumentos docs={proximos} empresa={empresa} vacio={`Nada vence en los próximos ${plazo} días.`} />
-        </section>
+      <section className="stack" style={{ gap: 12 }}>
+        <div className="row" style={{ justifyContent: 'space-between' }}>
+          <h2 className="ficha__h2">Vencido y próximos vencimientos</h2>
+          <nav aria-label="Plazo" className="row segmentado">
+            {PLAZOS.map((p) => (
+              <Link key={p} href={qs(p)} aria-current={p === plazo ? 'true' : undefined} className="btn btn--sm">{p} días</Link>
+            ))}
+          </nav>
+        </div>
+        <TablaDocumentos docs={proximos} empresa={empresa} vacio={`Nada caducado ni que venza en los próximos ${plazo} días.`} />
+      </section>
 
-        <aside className="card stack" style={{ flex: '1 1 340px', minWidth: 0, gap: 12 }}>
-          <h2 style={{ fontSize: 22, lineHeight: '28px', margin: 0 }}>Instalaciones y documentos</h2>
+      <section className="stack" style={{ gap: 12 }}>
+        <div className="row" style={{ justifyContent: 'space-between' }}>
+          <h2 className="ficha__h2">Instalaciones</h2>
           {cmc && (
-            <FormAccion accion={guardarAvisoEmpresa} className="stack" style={{ gap: 8 }}>
-              <input type="hidden" name="empresa" value={empresa.id} />
-              <div className="field">
-                <label htmlFor="antelacion-empresa">Aviso estándar del cliente (meses)</label>
-                <input className="input" id="antelacion-empresa" name="antelacionMeses" type="number" min={0} defaultValue={empresa.antelacionMeses ?? ''} placeholder={String(cfg.antelacionMeses)} />
-                <span className="hint">Vacío = {cfg.antelacionMeses} meses de la plataforma. Cada documento puede cambiarlo.</span>
-              </div>
-              <button className="btn btn--secondary btn--sm" type="submit">Guardar estándar</button>
-            </FormAccion>
+            <details className="ajustes">
+              <summary className="btn btn--ghost btn--sm"><Icon name="settings" />Aviso estándar del cliente: {empresa.antelacionMeses ?? cfg.antelacionMeses} meses</summary>
+              <FormAccion accion={guardarAvisoEmpresa} className="ajustes__caja stack" style={{ gap: 8 }}>
+                <input type="hidden" name="empresa" value={empresa.id} />
+                <div className="field">
+                  <label htmlFor="antelacion-empresa">Meses de antelación del primer aviso</label>
+                  <input className="input" id="antelacion-empresa" name="antelacionMeses" type="number" min={0} defaultValue={empresa.antelacionMeses ?? ''} placeholder={String(cfg.antelacionMeses)} />
+                  <span className="hint">Vacío = {cfg.antelacionMeses} meses de la plataforma. Cada instalación y documento puede cambiarlo.</span>
+                </div>
+                <button className="btn btn--secondary btn--sm" type="submit">Guardar</button>
+              </FormAccion>
+            </details>
           )}
-          {categorias.length === 0 && <p className="muted">Sin instalaciones.</p>}
+        </div>
+        {categorias.length === 0 && <p className="vacio card small">Esta empresa todavía no tiene instalaciones.</p>}
+        <ul className="instalaciones">
           {categorias.map((c) => {
             const deCat = lista.filter((d) => idDe(d.categoria) === String(c.id) && visibles.includes(d.estado as Estado))
+            const colores = visibles.filter((e) => cuenta(e, deCat) > 0)
+            const peor = deCat.length ? peorEstado(colores) : null
             return (
-              <div key={c.id} className="stack" style={{ gap: 8, paddingTop: 8, borderTop: '1px solid var(--line)' }}>
-                <Link href={`/portal/documentos?empresa=${empresa.id}&categoria=${c.id}`} style={{ fontWeight: 700, textDecoration: 'none' }}>{c.nombre}</Link>
-                {cmc && (
-                  <FormAccion accion={guardarAntelacionCategoria} className="row" style={{ gap: 8, alignItems: 'end' }}>
-                    <input type="hidden" name="categoria" value={c.id} />
-                    <div className="field" style={{ flex: '1 1 120px' }}>
-                      <label className="small" htmlFor={`ant-${c.id}`}>Meses de esta instalación</label>
-                      <input className="input" id={`ant-${c.id}`} name="antelacionMeses" type="number" min={0} defaultValue={c.antelacionMeses ?? ''} placeholder={String(empresa.antelacionMeses ?? cfg.antelacionMeses)} />
-                    </div>
-                    <button className="btn btn--secondary btn--sm" type="submit">Guardar</button>
-                  </FormAccion>
-                )}
-                {deCat.length === 0 && <p className="muted small">Sin documentos.</p>}
-                {deCat.map((d) => (
-                  <Link key={d.id} href={`/portal/documentos/${d.id}`} className="row" style={{ justifyContent: 'space-between', gap: 8, textDecoration: 'none', color: 'inherit' }}>
-                    <span>{d.titulo}</span>
-                    <StatusBadge estado={d.estado as Estado} />
-                  </Link>
-                ))}
-              </div>
+              <li key={c.id} className={`card instalacion${peor ? ` estado--${peor}` : ''}`}>
+                <div className="stack" style={{ gap: 4 }}>
+                  <Link href={`/portal/documentos?empresa=${empresa.id}&categoria=${c.id}`} className="instalacion__nombre">{c.nombre}</Link>
+                  {c.descripcion && <span className="small muted">{c.descripcion}</span>}
+                </div>
+                <div className="row" style={{ gap: 6 }}>
+                  {colores.map((e) => <StatusBadge key={e} estado={e} count={cuenta(e, deCat)} />)}
+                  {deCat.length === 0 && <span className="small muted">Sin documentos</span>}
+                </div>
+                <div className="instalacion__pie small muted">
+                  <span>{deCat.length} {deCat.length === 1 ? 'documento' : 'documentos'}</span>
+                  {c.gestion === 'gestionado' && <span className="mini"><Icon name="shield" size={12} />Gestiona CMC</span>}
+                  {cmc && (
+                    <details className="ajustes">
+                      <summary className="enlace small">Aviso: {c.antelacionMeses ?? empresa.antelacionMeses ?? cfg.antelacionMeses} meses</summary>
+                      <FormAccion accion={guardarAntelacionCategoria} className="ajustes__caja row" style={{ gap: 8, alignItems: 'end' }}>
+                        <input type="hidden" name="categoria" value={c.id} />
+                        <div className="field" style={{ flex: '1 1 120px' }}>
+                          <label className="small" htmlFor={`ant-${c.id}`}>Meses de esta instalación</label>
+                          <input className="input" id={`ant-${c.id}`} name="antelacionMeses" type="number" min={0} defaultValue={c.antelacionMeses ?? ''} placeholder={String(empresa.antelacionMeses ?? cfg.antelacionMeses)} />
+                        </div>
+                        <button className="btn btn--secondary btn--sm" type="submit">Guardar</button>
+                      </FormAccion>
+                    </details>
+                  )}
+                </div>
+              </li>
             )
           })}
-        </aside>
-      </div>
+        </ul>
+      </section>
     </>
   )
 }
@@ -160,6 +201,7 @@ async function Consolidado({ empresas, cmc, user, filtro, q }: { empresas: Empre
 
   return (
     <>
+      {cmc && <AvisoCorreo />}
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-end', gap: 16 }}>
         <div className="stack" style={{ gap: 4 }}>
           <p className="small muted">{cmc ? 'CMC' : `${empresas.length} empresas`}</p>

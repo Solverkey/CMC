@@ -526,3 +526,16 @@ img.visor { height: auto; max-height: 720px; object-fit: contain; }
 .menu-elegir__lista p { padding: 4px 10px; }
 .menu-elegir__lista a { padding: 10px; border-radius: var(--radius-md); color: var(--ink); font-weight: 600; font-size: 14px; text-decoration: none; }
 .menu-elegir__lista a:hover { background: var(--surface-sunken); color: var(--ink); }
+
+/* Panel de empresa: instalaciones */
+.instalaciones { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: var(--space-4); }
+.instalacion { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4) var(--space-4) var(--space-3); border-left: 5px solid var(--c, var(--line)); }
+.instalacion__nombre { font-weight: 700; font-size: 16px; line-height: 22px; color: var(--ink); text-decoration: none; }
+.instalacion__nombre:hover { color: var(--slate); text-decoration: underline; }
+.instalacion .status { font-size: 12px; padding: 2px 10px; }
+.instalacion__pie { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: auto; padding-top: var(--space-2); border-top: 1px solid var(--line); }
+.ajustes { position: relative; }
+.ajustes > summary { list-style: none; cursor: pointer; }
+.ajustes > summary::-webkit-details-marker { display: none; }
+.ajustes__caja { position: absolute; right: 0; top: calc(100% + 6px); z-index: 6; width: min(320px, 80vw); padding: var(--space-4); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface-raised); box-shadow: var(--shadow-card); }
+.instalacion .ajustes { margin-left: auto; }

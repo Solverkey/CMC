@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { AvisoCorreo } from '@/components/AvisoCorreo'
 import { EmpresaSelector } from '@/components/EmpresaSelector'
 import { contexto, empresasDelUsuario, fmt, fmtHora } from '@/lib/payload'
 import { centroAvisos } from '@/servicios/avisos'
@@ -19,7 +20,7 @@ const ETIQUETA_CORREO: Record<string, string> = {
   entregado: 'Entregado',
   abierto: 'Abierto',
   rebotado: 'Rebotado',
-  error: 'Error al enviar',
+  error: 'No enviado',
 }
 
 export default async function AvisosPage({ searchParams }: { searchParams: Promise<{ empresa?: string }> }) {
@@ -31,6 +32,7 @@ export default async function AvisosPage({ searchParams }: { searchParams: Promi
 
   return (
     <>
+      {cmc && <AvisoCorreo />}
       <EmpresaSelector empresas={empresas.map((e) => ({ id: String(e.id), nombre: e.razonSocial }))} activa={String(empresa.id)} />
       <div className="stack" style={{ gap: 4 }}>
         <p className="small muted">{empresa.razonSocial}</p>
@@ -70,7 +72,7 @@ export default async function AvisosPage({ searchParams }: { searchParams: Promi
                   <td>{fmtHora(c.createdAt)}</td>
                   <td>{c.asunto}{cmc && c.destinatario === 'cmc' && <span className="tag" style={{ marginLeft: 6 }}>Interno</span>}</td>
                   <td>{c.para}</td>
-                  <td><span className={`status status--${ESTADO_CORREO[c.estado ?? 'pendiente'] ?? 'naranja'}`}>{ETIQUETA_CORREO[c.estado ?? 'pendiente'] ?? c.estado}</span></td>
+                  <td><span title={c.error ?? undefined} className={`status status--${ESTADO_CORREO[c.estado ?? 'pendiente'] ?? 'naranja'}`}>{ETIQUETA_CORREO[c.estado ?? 'pendiente'] ?? c.estado}</span></td>
                 </tr>
               ))}
             </tbody>
